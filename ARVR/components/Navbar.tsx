@@ -8,9 +8,45 @@ interface NavbarProps {
   setActiveTab: (tab: 'student' | 'staff') => void;
   user: any;
   onLogout: () => void;
+  branding?: {
+    pageTitle?: string;
+    pageSubtitle?: string;
+    pageBadge?: string;
+  };
 }
 
-export default function Navbar({ activeTab, setActiveTab, user, onLogout }: NavbarProps) {
+export default function Navbar({ activeTab, setActiveTab, user, onLogout, branding }: NavbarProps) {
+  const [liveBranding, setLiveBranding] = React.useState({
+    pageTitle: branding?.pageTitle || 'AR/VR ACADEMY',
+    pageSubtitle: branding?.pageSubtitle || 'Spatial Computing & Immersive Training Hub',
+    pageBadge: branding?.pageBadge || 'ENTERPRISE',
+  });
+
+  React.useEffect(() => {
+    if (branding) {
+      setLiveBranding({
+        pageTitle: branding.pageTitle || 'AR/VR ACADEMY',
+        pageSubtitle: branding.pageSubtitle || 'Spatial Computing & Immersive Training Hub',
+        pageBadge: branding.pageBadge || 'ENTERPRISE',
+      });
+    }
+  }, [branding]);
+
+  React.useEffect(() => {
+    const handleBrandingUpdate = (e: any) => {
+      if (e.detail) {
+        setLiveBranding((prev) => ({
+          ...prev,
+          pageTitle: e.detail.pageTitle ?? prev.pageTitle,
+          pageSubtitle: e.detail.pageSubtitle ?? prev.pageSubtitle,
+          pageBadge: e.detail.pageBadge ?? prev.pageBadge,
+        }));
+      }
+    };
+    window.addEventListener('branding-updated', handleBrandingUpdate);
+    return () => window.removeEventListener('branding-updated', handleBrandingUpdate);
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-purple-200/80 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,13 +62,17 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }: Navb
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-base tracking-tight text-slate-900 font-sans">
-                  AR/VR ACADEMY
+                  {liveBranding.pageTitle}
                 </span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
-                  ENTERPRISE
-                </span>
+                {liveBranding.pageBadge && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 rounded-md">
+                    {liveBranding.pageBadge}
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-500 hidden sm:block font-medium">Spatial Computing & Immersive Training Hub</p>
+              {liveBranding.pageSubtitle && (
+                <p className="text-[11px] text-slate-500 hidden sm:block font-medium">{liveBranding.pageSubtitle}</p>
+              )}
             </div>
           </div>
 

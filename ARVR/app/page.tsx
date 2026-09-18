@@ -10,10 +10,53 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'student' | 'staff'>('student');
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [branding, setBranding] = useState<any>({
+    pageTitle: 'AR/VR ACADEMY',
+    pageSubtitle: 'Spatial Computing & Immersive Training Hub',
+    pageBadge: 'ENTERPRISE',
+    browserTitle: 'AR/VR Spatial Computing Academy | Immersive Training Platform',
+    pageDescription: 'Enterprise spatial computing academy and immersive training management system with real-time attendance, daily practical tasks, and automated certification.',
+    orgName: 'AR/VR COE',
+    footerText: 'AR/VR Spatial Computing Academy © 2026',
+    supportEmail: 'support@arvr.com',
+  });
 
   useEffect(() => {
     checkSession();
+    fetchBranding();
+
+    const handleBrandingUpdate = (e: any) => {
+      if (e.detail) {
+        setBranding((prev: any) => ({ ...prev, ...e.detail }));
+        if (e.detail.browserTitle) {
+          document.title = e.detail.browserTitle;
+        }
+      }
+    };
+    window.addEventListener('branding-updated', handleBrandingUpdate);
+    return () => window.removeEventListener('branding-updated', handleBrandingUpdate);
   }, []);
+
+  useEffect(() => {
+    if (branding?.browserTitle && typeof document !== 'undefined') {
+      document.title = branding.browserTitle;
+    }
+  }, [branding?.browserTitle]);
+
+  const fetchBranding = async () => {
+    try {
+      const res = await fetch('/api/admin/settings/page-details');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBranding(data);
+        if (data.browserTitle && typeof document !== 'undefined') {
+          document.title = data.browserTitle;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load branding details', e);
+    }
+  };
 
   const checkSession = async () => {
     try {
@@ -53,7 +96,7 @@ export default function Home() {
       <div className="min-h-screen bg-[#f4f3f8] text-purple-900 flex items-center justify-center">
         <div className="flex items-center gap-3 text-sm font-semibold text-purple-800">
           <Box className="w-6 h-6 text-purple-600 animate-spin" />
-          <span>Loading AR/VR Training Platform...</span>
+          <span>Loading {branding?.pageTitle || 'AR/VR Training Platform'}...</span>
         </div>
       </div>
     );
@@ -68,6 +111,7 @@ export default function Home() {
         setActiveTab={setActiveTab}
         user={user}
         onLogout={handleLogout}
+        branding={branding}
       />
 
       {/* Main Content Area */}
@@ -77,7 +121,12 @@ export default function Home() {
         )}
 
         {activeTab === 'staff' && (
-          <StaffPortal user={user} onLoginSuccess={handleLoginSuccess} />
+          <StaffPortal 
+            user={user} 
+            onLoginSuccess={handleLoginSuccess}
+            branding={branding}
+            onUpdateBranding={setBranding}
+          />
         )}
       </main>
 
@@ -87,8 +136,7 @@ export default function Home() {
           
           <div className="flex items-center gap-2">
             <Box className="w-4 h-4 text-purple-600" />
-            <span className="font-bold text-slate-900">AR/VR Spatial Computing Academy</span>
-            <span>© 2026</span>
+            <span className="font-bold text-slate-900">{branding?.footerText || 'AR/VR Spatial Computing Academy © 2026'}</span>
           </div>
 
           {/* Demo Quick Access Credentials Bar */}

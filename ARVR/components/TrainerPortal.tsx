@@ -376,8 +376,14 @@ export default function TrainerPortal({ user, onLoginSuccess }: TrainerPortalPro
 
       {/* Evaluation Drawer / Modal */}
       {evaluatingTaskId && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+        <div 
+          onClick={() => setEvaluatingTaskId(null)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl cursor-default"
+          >
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Star className="w-5 h-5 text-amber-400" />
               <span>Evaluate Task Submission</span>

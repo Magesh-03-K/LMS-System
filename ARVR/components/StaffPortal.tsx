@@ -1,20 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShieldCheck, UserCheck, KeyRound, CheckCircle2, AlertCircle, Sparkles, RefreshCw, 
+  ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Sparkles, RefreshCw, 
   Users, Layers, Award, FileSpreadsheet, Plus, Calendar, Search, Star, BarChart3, FileText, Send, ExternalLink, UploadCloud,
   LayoutDashboard, CheckSquare, ChevronRight, ChevronLeft, UserPlus, Info, Edit, Eye, Filter, Check, X, FileCheck, BookOpen, Clock, Save, Settings, Trash2, GraduationCap,
-  Paperclip, FileUp, Link as LinkIcon, Download, ListChecks
+  Paperclip, FileUp, Link as LinkIcon, Download, ListChecks, XCircle, Globe
 } from 'lucide-react';
 import { LEVEL_CONFIG, generateBatchName, calculateEndDate, calculateExamDate, generateTrainingDaysCalendar, DEFAULT_CURRICULUM_BY_LEVEL, formatDateDisplay } from '@/lib/batchUtils';
 
 interface StaffPortalProps {
   user: any;
   onLoginSuccess: (user: any) => void;
+  branding?: any;
+  onUpdateBranding?: (branding: any) => void;
 }
 
-export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) {
+export default function StaffPortal({ user, onLoginSuccess, branding, onUpdateBranding }: StaffPortalProps) {
   // Login form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,7 +64,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
   };
 
   // Active Sub-Tab
-  const [staffTab, setStaffTab] = useState<'overview' | 'evaluations' | 'batches' | 'calendar' | 'certificates' | 'students' | 'settings'>('overview');
+  const [staffTab, setStaffTab] = useState<'overview' | 'evaluations' | 'batches' | 'curriculum' | 'calendar' | 'certificates' | 'students' | 'settings'>('overview');
 
   // Shared Data State
   const [stats, setStats] = useState<any>(null);
@@ -133,12 +135,72 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
   const [savingOverride, setSavingOverride] = useState(false);
   const [overrideActionMsg, setOverrideActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Task Completion Hover Tooltip State & Handlers
+  const [hoveredTaskTip, setHoveredTaskTip] = useState<{
+    studentName: string;
+    registerNo: string;
+    totalDays: number;
+    completedTasks: any[];
+    missingTasks: any[];
+    focus: 'submitted' | 'missing' | 'all';
+    rect: { top: number; bottom: number; left: number; right: number; width: number; height: number };
+  } | null>(null);
+  const [tipActiveFilter, setTipActiveFilter] = useState<'all' | 'completed' | 'missing'>('all');
+  const taskTipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTaskNumberMouseEnter = (
+    item: any,
+    focus: 'submitted' | 'missing' | 'all',
+    e: React.MouseEvent<HTMLElement>
+  ) => {
+    if (taskTipTimeoutRef.current) {
+      clearTimeout(taskTipTimeoutRef.current);
+      taskTipTimeoutRef.current = null;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTipActiveFilter('all');
+    setHoveredTaskTip({
+      studentName: item.name,
+      registerNo: item.registerNo,
+      totalDays: item.tasksBreakdown?.length || ((item.completedTasks?.length || 0) + (item.missingTasks?.length || 0)) || 15,
+      completedTasks: item.completedTasks || [],
+      missingTasks: item.missingTasks || [],
+      focus,
+      rect: {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      },
+    });
+  };
+
+  const handleTaskNumberMouseLeave = () => {
+    taskTipTimeoutRef.current = setTimeout(() => {
+      setHoveredTaskTip(null);
+    }, 200);
+  };
+
+  const handleTooltipMouseEnter = () => {
+    if (taskTipTimeoutRef.current) {
+      clearTimeout(taskTipTimeoutRef.current);
+      taskTipTimeoutRef.current = null;
+    }
+  };
+
+  const handleTooltipMouseLeave = () => {
+    setHoveredTaskTip(null);
+  };
+
   // URL Hash Sync for Deep-linking & Browser Refresh
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
       if (hash === 'overview') setStaffTab('overview');
-      else if (hash === 'batches' || hash === 'curriculum') setStaffTab('batches');
+      else if (hash === 'curriculum') setStaffTab('curriculum');
+      else if (hash === 'batches') setStaffTab('batches');
       else if (hash === 'students') setStaffTab('students');
       else if (hash === 'tasks' || hash === 'evaluations') setStaffTab('evaluations');
       else if (hash === 'certificates' || hash === 'reports') setStaffTab('certificates');
@@ -150,12 +212,13 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const handleTabSwitch = (tab: 'overview' | 'evaluations' | 'batches' | 'calendar' | 'certificates' | 'students' | 'settings') => {
+  const handleTabSwitch = (tab: 'overview' | 'evaluations' | 'batches' | 'curriculum' | 'calendar' | 'certificates' | 'students' | 'settings') => {
     setErrorMsg('');
     setSuccessMsg('');
     setStaffTab(tab);
     if (tab === 'overview') window.location.hash = 'overview';
     else if (tab === 'batches') window.location.hash = 'batches';
+    else if (tab === 'curriculum') window.location.hash = 'curriculum';
     else if (tab === 'students') window.location.hash = 'students';
     else if (tab === 'evaluations') window.location.hash = 'tasks';
     else if (tab === 'certificates') window.location.hash = 'certificates';
@@ -368,7 +431,21 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
   // Settings & Task Configuration Modal State
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsSectionTab, setSettingsSectionTab] = useState<'tasks' | 'attendance' | 'drive'>('tasks');
+  const [settingsSectionTab, setSettingsSectionTab] = useState<'pageDetails' | 'attendance' | 'drive'>('pageDetails');
+
+  // Page & Branding Settings State
+  const [pageTitle, setPageTitle] = useState(branding?.pageTitle || 'AR/VR ACADEMY');
+  const [pageSubtitle, setPageSubtitle] = useState(branding?.pageSubtitle || 'Spatial Computing & Immersive Training Hub');
+  const [pageBadge, setPageBadge] = useState(branding?.pageBadge || 'ENTERPRISE');
+  const [browserTitle, setBrowserTitle] = useState(branding?.browserTitle || 'AR/VR Spatial Computing Academy | Immersive Training Platform');
+  const [pageDescription, setPageDescription] = useState(
+    branding?.pageDescription || 'Enterprise spatial computing academy and immersive training management system with real-time attendance, daily practical tasks, and automated certification.'
+  );
+  const [orgName, setOrgName] = useState(branding?.orgName || 'AR/VR COE');
+  const [footerText, setFooterText] = useState(branding?.footerText || 'AR/VR Spatial Computing Academy © 2026');
+  const [supportEmail, setSupportEmail] = useState(branding?.supportEmail || 'support@arvr.com');
+  const [loadingPageSettings, setLoadingPageSettings] = useState(false);
+  const [savingPageSettings, setSavingPageSettings] = useState(false);
   const [configuredLevels, setConfiguredLevels] = useState<string[]>(['Level 0', 'Level 1', 'Level 2']);
   const [levelDisplayNames, setLevelDisplayNames] = useState<Record<string, string>>({
     'Level 0': 'Orientation & Spatial Computing Fundamentals',
@@ -670,6 +747,95 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
     }
   };
 
+  useEffect(() => {
+    if (branding) {
+      if (branding.pageTitle) setPageTitle(branding.pageTitle);
+      if (branding.pageSubtitle) setPageSubtitle(branding.pageSubtitle);
+      if (branding.pageBadge) setPageBadge(branding.pageBadge);
+      if (branding.browserTitle) setBrowserTitle(branding.browserTitle);
+      if (branding.pageDescription) setPageDescription(branding.pageDescription);
+      if (branding.orgName) setOrgName(branding.orgName);
+      if (branding.footerText) setFooterText(branding.footerText);
+      if (branding.supportEmail) setSupportEmail(branding.supportEmail);
+    }
+  }, [branding]);
+
+  const fetchPageSettings = async () => {
+    setLoadingPageSettings(true);
+    try {
+      const res = await fetch('/api/admin/settings/page-details');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.pageTitle) setPageTitle(data.pageTitle);
+        if (data.pageSubtitle) setPageSubtitle(data.pageSubtitle);
+        if (data.pageBadge) setPageBadge(data.pageBadge);
+        if (data.browserTitle) setBrowserTitle(data.browserTitle);
+        if (data.pageDescription) setPageDescription(data.pageDescription);
+        if (data.orgName) setOrgName(data.orgName);
+        if (data.footerText) setFooterText(data.footerText);
+        if (data.supportEmail) setSupportEmail(data.supportEmail);
+      }
+    } catch (err) {
+      console.warn('Failed to load page settings:', err);
+    } finally {
+      setLoadingPageSettings(false);
+    }
+  };
+
+  const handleSavePageSettings = async () => {
+    setSavingPageSettings(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const payload = {
+        pageTitle,
+        pageSubtitle,
+        pageBadge,
+        browserTitle,
+        pageDescription,
+        orgName,
+        footerText,
+        supportEmail,
+      };
+
+      const res = await fetch('/api/admin/settings/page-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await parseResponseJson(res, 'Failed to save page settings');
+      if (!res.ok) throw new Error(data.error || 'Failed to save page settings');
+
+      showSuccess('✓ Page title and branding details saved successfully!');
+
+      if (onUpdateBranding) {
+        onUpdateBranding(data);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('branding-updated', { detail: data }));
+        if (data.browserTitle) {
+          document.title = data.browserTitle;
+        }
+      }
+    } catch (err: any) {
+      showError(err, 'Error saving page settings');
+    } finally {
+      setSavingPageSettings(false);
+    }
+  };
+
+  const handleResetPageSettingsToDefault = () => {
+    setPageTitle('AR/VR ACADEMY');
+    setPageSubtitle('Spatial Computing & Immersive Training Hub');
+    setPageBadge('ENTERPRISE');
+    setBrowserTitle('AR/VR Spatial Computing Academy | Immersive Training Platform');
+    setPageDescription('Enterprise spatial computing academy and immersive training management system with real-time attendance, daily practical tasks, and automated certification.');
+    setOrgName('AR/VR COE');
+    setFooterText('AR/VR Spatial Computing Academy © 2026');
+    setSupportEmail('support@arvr.com');
+  };
+
   const handleSaveAttendanceSettings = async () => {
     setSavingAttendanceSettings(true);
     setErrorMsg('');
@@ -778,13 +944,23 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
     }
     setErrorMsg('');
     setSuccessMsg('');
-    setSettingsSectionTab('tasks');
-    const lvl = settingsActiveLevel || 'Level 0';
-    setSettingsActiveLevel(lvl);
-    fetchSettingsTasks(lvl);
+    setSettingsSectionTab('attendance');
     fetchAttendanceSettings();
     fetchDriveSettings();
     handleTabSwitch('settings');
+  };
+
+  const handleNavigateToCurriculum = () => {
+    if (user && user.role !== 'ADMIN') {
+      showError('Access restricted: Curriculum configuration is restricted to Academy Administrators.');
+      return;
+    }
+    setErrorMsg('');
+    setSuccessMsg('');
+    const lvl = settingsActiveLevel || 'Level 0';
+    setSettingsActiveLevel(lvl);
+    fetchSettingsTasks(lvl);
+    handleTabSwitch('curriculum');
   };
 
   const handleSettingsLevelSwitch = (level: string) => {
@@ -795,8 +971,9 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
   };
 
   useEffect(() => {
-    if (staffTab === 'settings') {
+    if (staffTab === 'curriculum') {
       fetchSettingsTasks(settingsActiveLevel || 'Level 0');
+    } else if (staffTab === 'settings') {
       fetchAttendanceSettings();
       fetchDriveSettings();
     }
@@ -1292,6 +1469,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
       if (!res.ok) throw new Error(data.error || 'Failed to save calendar & curriculum');
 
       setSuccessMsg(`✓ Training Calendar & Curriculum saved for ${curriculumBatch.name}!`);
+      setIsEditingDates(false);
       setShowCurriculumModal(false);
 
       // Refresh batches
@@ -1415,6 +1593,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
       fetchStudents();
       fetchActivities();
       fetchConfiguredLevels();
+      fetchPageSettings();
     }
   }, [user]);
 
@@ -1429,7 +1608,9 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (evaluatingTask) {
+        if (hoveredTaskTip) {
+          setHoveredTaskTip(null);
+        } else if (evaluatingTask) {
           setEvaluatingTask(null);
           setSelectedSubmissionStudent(null);
         } else if (showEditTaskModal) {
@@ -2009,46 +2190,27 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
             <div className="text-[10px] font-mono tracking-widest text-purple-700 font-extrabold uppercase">AR/VR COE TRAINING MANAGEMENT</div>
             <h1 className="text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <span>Admin Portal</span>
-              <span className="text-[10px] font-mono font-bold text-purple-800 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">SYSTEM ADMIN</span>
+              <button
+                type="button"
+                onClick={() => setShowAdminProfileModal(true)}
+                title="View Admin Profile"
+                className="text-[10px] font-mono font-bold text-purple-800 bg-purple-100 hover:bg-purple-200 transition-colors border border-purple-200 px-2 py-0.5 rounded-full cursor-pointer"
+              >
+                SYSTEM ADMIN
+              </button>
             </h1>
           </div>
         </div>
 
-        {/* Combined Action Capsule Header Bar */}
-        <div className="inline-flex items-center rounded-2xl bg-white p-1 border border-purple-200/90 shadow-sm shadow-purple-900/5 divide-x divide-purple-100">
-          <button
-            onClick={() => setShowAdminProfileModal(true)}
-            title="Admin Account Profile"
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-purple-950 hover:bg-purple-50 transition-colors"
-          >
-            <UserCheck className="w-4 h-4 text-purple-700" />
-            <span>{user.name || 'System Admin'}</span>
-          </button>
-
-          {user && user.role === 'ADMIN' && (
-            <button
-              onClick={handleOpenSettingsModal}
-              title="System Settings & Configurations"
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-colors ${
-                staffTab === 'settings'
-                  ? 'bg-purple-900 text-white shadow-xs'
-                  : 'text-purple-900 hover:bg-purple-100/70'
-              }`}
-            >
-              <Settings className={`w-4 h-4 ${staffTab === 'settings' ? 'text-white' : 'text-purple-700'}`} />
-              <span>Settings</span>
-            </button>
-          )}
-
-          <button
-            onClick={handleLogout}
-            title="Logout of Admin Portal"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-rose-700 hover:bg-rose-50 transition-colors"
-          >
-            <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-            <span>Logout</span>
-          </button>
-        </div>
+        {/* Header Logout Action */}
+        <button
+          onClick={handleLogout}
+          title="Logout of Admin Portal"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-purple-200/90 shadow-sm shadow-purple-900/5 text-xs font-bold text-slate-600 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+        >
+          <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+          <span>Logout</span>
+        </button>
       </header>
 
       <div className="max-w-[1600px] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-6">
@@ -2083,12 +2245,12 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                   </div>
                 </div>
 
-                {/* 2. Batches / Curriculum */}
+                {/* 2. Batches */}
                 <div className="relative group/btn flex-1">
                   <button
                     onClick={() => handleTabSwitch('batches')}
-                    title="Batches / Curriculum"
-                    aria-label="Batches and Curriculum"
+                    title="Batches"
+                    aria-label="Training Batches"
                     aria-current={staffTab === 'batches' || staffTab === 'calendar' ? 'page' : undefined}
                     className={`w-full flex flex-col lg:flex-row items-center justify-center p-2 sm:p-2.5 lg:p-3 rounded-2xl text-xs font-bold transition-all duration-200 min-h-[44px] ${
                       staffTab === 'batches' || staffTab === 'calendar'
@@ -2102,7 +2264,30 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                     </span>
                   </button>
                   <div className="hidden lg:block absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover/btn:opacity-100 transition-opacity z-50">
-                    Batches / Curriculum
+                    Batches
+                  </div>
+                </div>
+
+                {/* 3. Curriculum */}
+                <div className="relative group/btn flex-1">
+                  <button
+                    onClick={() => handleTabSwitch('curriculum')}
+                    title="Curriculum & Tasks"
+                    aria-label="Curriculum and Tasks"
+                    aria-current={staffTab === 'curriculum' ? 'page' : undefined}
+                    className={`w-full flex flex-col lg:flex-row items-center justify-center p-2 sm:p-2.5 lg:p-3 rounded-2xl text-xs font-bold transition-all duration-200 min-h-[44px] ${
+                      staffTab === 'curriculum'
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/25 scale-[1.02]'
+                        : 'text-slate-600 hover:text-purple-900 hover:bg-purple-100/60'
+                    }`}
+                  >
+                    <BookOpen className={`w-5 h-5 shrink-0 ${staffTab === 'curriculum' ? 'text-white' : 'text-purple-600'}`} />
+                    <span className="text-[10px] font-bold mt-1 lg:hidden leading-none truncate max-w-full text-center">
+                      Curriculum
+                    </span>
+                  </button>
+                  <div className="hidden lg:block absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover/btn:opacity-100 transition-opacity z-50">
+                    Curriculum & Tasks
                   </div>
                 </div>
 
@@ -2212,11 +2397,12 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                 <span className="text-slate-400 font-medium">Portal /</span>
                 <span className="px-3 py-1 rounded-xl bg-purple-100/80 border border-purple-200/80 text-purple-950 font-extrabold shadow-2xs">
                   {staffTab === 'overview' && 'Admin / Overview'}
-                  {(staffTab === 'batches' || staffTab === 'calendar') && 'Admin / Batches / Curriculum'}
+                  {(staffTab === 'batches' || staffTab === 'calendar') && 'Admin / Batches'}
+                  {staffTab === 'curriculum' && 'Admin / Curriculum & Tasks'}
                   {staffTab === 'students' && 'Admin / Students List with New Registration'}
                   {staffTab === 'evaluations' && 'Staff & Trainer / Task Portal'}
                   {staffTab === 'certificates' && 'Admin / Certificates & Reports'}
-                  {staffTab === 'settings' && 'Admin / System & Training Settings'}
+                  {staffTab === 'settings' && 'Admin / System Settings'}
                 </span>
               </div>
               <div className="text-[11px] font-semibold text-slate-500 hidden sm:block">
@@ -2882,23 +3068,34 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
             <div>
               <div className="flex items-center gap-2 text-purple-700 text-xs font-bold uppercase tracking-wider mb-1">
                 <Layers className="w-4 h-4 text-purple-700" />
-                <span>Training Batches & Curriculum Hub</span>
+                <span>Training Batches Hub</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Batches / Curriculum
+                Training Batches
               </h2>
               <p className="text-slate-600 text-xs sm:text-sm mt-0.5 font-medium">
-                Manage training batches and their curriculum.
+                Manage training batches, active schedules, and student enrollment.
               </p>
             </div>
 
-            <button
-              onClick={handleOpenCreateBatchModal}
-              className="py-3 px-5 rounded-2xl pro-button-primary text-white font-bold text-xs flex items-center gap-2 shadow-md hover:scale-[1.02] transition-all shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Batch</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('curriculum')}
+                className="py-3 px-4 rounded-2xl bg-purple-50 text-purple-900 border border-purple-200 font-bold text-xs flex items-center gap-2 hover:bg-purple-100 transition-all shadow-xs"
+              >
+                <BookOpen className="w-4 h-4 text-purple-700" />
+                <span>Curriculum & Tasks</span>
+              </button>
+
+              <button
+                onClick={handleOpenCreateBatchModal}
+                className="py-3 px-5 rounded-2xl pro-button-primary text-white font-bold text-xs flex items-center gap-2 shadow-md hover:scale-[1.02] transition-all shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Batch</span>
+              </button>
+            </div>
           </div>
 
           {/* Search & Filter Control Bar */}
@@ -3143,8 +3340,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* CREATE NEW BATCH MODAL OVERLAY */}
       {showCreateBatchModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <div 
+          onClick={() => setShowCreateBatchModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto cursor-default"
+          >
             
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div>
@@ -3393,11 +3596,19 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
         </div>
       )}
 
-      {/* CURRICULUM EDITOR MODAL OVERLAY */}
       {/* CURRICULUM & CALENDAR SCHEDULE CONFIGURATION MODAL OVERLAY */}
       {showCurriculumModal && curriculumBatch && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+        <div 
+          onClick={() => {
+            setIsEditingDates(false);
+            setShowCurriculumModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto cursor-default"
+          >
             
             {/* Header Info */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-100 pb-4">
@@ -3424,21 +3635,39 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
               <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
                 <button
                   type="button"
-                  onClick={() => setIsEditingDates(!isEditingDates)}
-                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  disabled={savingCurriculum}
+                  onClick={isEditingDates ? handleSaveCurriculumSubmit : () => setIsEditingDates(true)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     isEditingDates
-                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm hover:bg-emerald-700'
                       : 'bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100'
                   }`}
                 >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{isEditingDates ? '✓ Save Date Mode' : 'Edit Dates'}</span>
+                  {savingCurriculum ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : isEditingDates ? (
+                    <Save className="w-3.5 h-3.5" />
+                  ) : (
+                    <Calendar className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isEditingDates ? 'Save & Close Dates' : 'Edit Dates'}</span>
                 </button>
+
+                {isEditingDates && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingDates(false)}
+                    className="py-2 px-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all cursor-pointer"
+                    title="Cancel date editing"
+                  >
+                    Cancel
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={() => setShowRegenerateConfirmModal(true)}
-                  className="py-2 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition-colors text-xs font-bold flex items-center gap-1.5"
+                  className="py-2 px-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition-colors text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   title="Regenerate calendar dates sequentially from Start Date"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
@@ -3447,18 +3676,11 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
                 <button
                   type="button"
-                  onClick={handleAutoFillCurriculumTemplate}
-                  className="py-2 px-3 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100 transition-colors text-xs font-bold flex items-center gap-1.5"
-                  title="Populate standard level curriculum template"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Auto-Fill Level Template</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCurriculumModal(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-purple-50 transition-colors"
+                  onClick={() => {
+                    setIsEditingDates(false);
+                    setShowCurriculumModal(false);
+                  }}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-purple-50 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -3520,7 +3742,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                       </div>
                     </div>
 
-                  {/* Multi-Task & Resources Editor in Batch Curriculum */}
+                  {/* Multi-Task & Resources Read-Only View in Batch Curriculum */}
                   {(() => {
                     const dayTasks = (day.tasks && day.tasks.length > 0)
                       ? day.tasks
@@ -3529,7 +3751,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
                     return (
                       <div className="space-y-4 pt-1">
-                        {/* Tasks List Section */}
+                        {/* Tasks List Section (Read-Only) */}
                         <div className="space-y-2.5">
                           <div className="flex items-center justify-between border-b border-purple-200/70 pb-2">
                             <div className="flex items-center gap-2">
@@ -3541,21 +3763,16 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                                 {dayTasks.length} {dayTasks.length === 1 ? 'Task' : 'Tasks'}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddTask(idx, true)}
-                              className="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[11px] font-bold transition-all flex items-center gap-1 border border-purple-300 shadow-2xs"
-                            >
-                              <Plus className="w-3.5 h-3.5 text-purple-700" />
-                              <span>Add Task</span>
-                            </button>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Read-Only (Configured in Curriculum)
+                            </span>
                           </div>
 
                           <div className="space-y-2.5">
                             {dayTasks.map((taskItem, tIdx) => (
                               <div
                                 key={taskItem.id || tIdx}
-                                className="p-3.5 rounded-xl bg-white border border-purple-200/80 shadow-2xs space-y-2.5"
+                                className="p-3.5 rounded-xl bg-white border border-purple-200/80 shadow-2xs space-y-2"
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
@@ -3568,51 +3785,26 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                                       </span>
                                     )}
                                   </div>
-                                  {dayTasks.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveTask(idx, tIdx, true)}
-                                      className="text-[11px] text-rose-600 hover:text-rose-800 px-2 py-0.5 rounded hover:bg-rose-50 transition-colors flex items-center gap-1 font-semibold"
-                                      title="Remove this task"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                      <span>Remove Task</span>
-                                    </button>
-                                  )}
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                  <div>
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                      Task Title
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={taskItem.title}
-                                      onChange={(e) => handleTaskFieldChange(idx, tIdx, 'title', e.target.value, true)}
-                                      placeholder={isExamDay ? `Final Examination Task ${tIdx + 1}` : `e.g. Task ${tIdx + 1}: Scene Setup`}
-                                      className="w-full pro-input rounded-xl px-3 py-2 text-xs font-semibold text-slate-900"
-                                    />
+                                <div className="space-y-1">
+                                  <div className="text-xs font-extrabold text-slate-900">
+                                    {taskItem.title || `Day ${day.dayNumber} Task ${tIdx + 1}`}
                                   </div>
-                                  <div className="md:col-span-2">
-                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                      Task Description & Requirements
-                                    </label>
-                                    <textarea
-                                      rows={2}
-                                      value={taskItem.description}
-                                      onChange={(e) => handleTaskFieldChange(idx, tIdx, 'description', e.target.value, true)}
-                                      placeholder="Specify technical instructions, Unity components to configure, steps, and required deliverables..."
-                                      className="w-full pro-input rounded-xl px-3 py-2 text-xs text-slate-800 resize-y"
-                                    />
-                                  </div>
+                                  {taskItem.description ? (
+                                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line bg-purple-50/30 p-2.5 rounded-lg border border-purple-100">
+                                      {taskItem.description}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-slate-400 italic">No description specified.</p>
+                                  )}
                                 </div>
                               </div>
                             ))}
                           </div>
                         </div>
 
-                        {/* Learning Resources Section (PDFs, Links, Others) */}
+                        {/* Learning Resources Section (Read-Only) */}
                         <div className="space-y-2.5 pt-2 border-t border-purple-200/70">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -3624,127 +3816,53 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                                 {dayResources.length} {dayResources.length === 1 ? 'Resource' : 'Resources'}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddResource(idx, true)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-[11px] font-bold transition-all flex items-center gap-1 border border-indigo-300 shadow-2xs"
-                            >
-                              <Plus className="w-3.5 h-3.5 text-indigo-700" />
-                              <span>Add Resource</span>
-                            </button>
                           </div>
 
                           {dayResources.length === 0 ? (
-                            <div className="p-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 text-center">
-                              <p className="text-[11px] text-slate-600 font-medium">
-                                No resources added for this day yet. Click <strong className="text-indigo-800 font-bold">+ Add Resource</strong> to provide lecture PDFs, documentation links, or starter assets.
+                            <div className="p-3 rounded-xl border border-dashed border-purple-200 bg-purple-50/20 text-center">
+                              <p className="text-[11px] text-slate-500 font-medium">
+                                No resources attached for this day.
                               </p>
                             </div>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               {dayResources.map((resItem, rIdx) => (
                                 <div
                                   key={resItem.id || rIdx}
-                                  className="p-3 rounded-xl bg-white border border-indigo-200/80 shadow-2xs space-y-2.5"
+                                  className="p-3 rounded-xl bg-white border border-purple-200/80 shadow-2xs flex items-center justify-between gap-3"
                                 >
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                    <div className="sm:col-span-2">
-                                      <label className="block text-[10px] font-bold text-slate-600 mb-1">
-                                        Resource Title / Name
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={resItem.title}
-                                        onChange={(e) => handleResourceFieldChange(idx, rIdx, 'title', e.target.value, true)}
-                                        placeholder="e.g. Day 1 VR Setup Guide (PDF) or Unity Official Manual"
-                                        className="w-full pro-input rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-900"
-                                      />
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                                      {resItem.type === 'pdf' ? (
+                                        <FileText className="w-4 h-4" />
+                                      ) : resItem.type === 'link' ? (
+                                        <LinkIcon className="w-4 h-4" />
+                                      ) : (
+                                        <Paperclip className="w-4 h-4" />
+                                      )}
                                     </div>
-                                    <div>
-                                      <div className="flex items-center justify-between mb-1">
-                                        <label className="block text-[10px] font-bold text-slate-600">Type</label>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveResource(idx, rIdx, true)}
-                                          className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5"
-                                          title="Remove this resource"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                          <span>Remove</span>
-                                        </button>
-                                      </div>
-                                      <select
-                                        value={resItem.type || 'pdf'}
-                                        onChange={(e) => handleResourceFieldChange(idx, rIdx, 'type', e.target.value, true)}
-                                        className="w-full pro-input rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800 bg-white"
-                                      >
-                                        <option value="pdf">📄 PDF Document</option>
-                                        <option value="link">🔗 Web Link / URL</option>
-                                        <option value="doc">📁 Document / Zip Asset</option>
-                                        <option value="video">🎥 Video Reference</option>
-                                        <option value="other">📌 Other Reference</option>
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1">
-                                      <input
-                                        type="text"
-                                        value={resItem.url}
-                                        onChange={(e) => handleResourceFieldChange(idx, rIdx, 'url', e.target.value, true)}
-                                        placeholder={resItem.type === 'pdf' ? 'URL to PDF (e.g. https://... or upload PDF below)' : 'https://... resource URL'}
-                                        className="w-full pro-input rounded-xl px-3 py-1.5 text-xs text-slate-800 font-mono"
-                                      />
-                                    </div>
-
-                                    {/* Direct Upload PDF / File Button */}
-                                    <label className="cursor-pointer shrink-0">
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.docx,.zip,.mp4,image/*"
-                                        className="hidden"
-                                        disabled={uploadingResourceKey === `curriculum-${idx}-${rIdx}`}
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) {
-                                            handleResourceFileUpload(
-                                              file,
-                                              (url, filename, type) => {
-                                                handleResourceUploadSuccess(idx, rIdx, url, filename, type, true);
-                                              },
-                                              `curriculum-${idx}-${rIdx}`
-                                            );
-                                          }
-                                          e.target.value = '';
-                                        }}
-                                      />
-                                      <span className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                        uploadingResourceKey === `curriculum-${idx}-${rIdx}`
-                                          ? 'bg-purple-100 text-purple-700 border-purple-300 animate-pulse'
-                                          : 'bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100 shadow-2xs'
-                                      }`}>
-                                        {uploadingResourceKey === `curriculum-${idx}-${rIdx}` ? (
-                                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-700" />
-                                        ) : (
-                                          <FileUp className="w-3.5 h-3.5 text-purple-700" />
-                                        )}
-                                        <span>{uploadingResourceKey === `curriculum-${idx}-${rIdx}` ? 'Uploading...' : 'Upload File'}</span>
+                                    <div className="min-w-0">
+                                      <span className="text-xs font-bold text-slate-900 truncate block">
+                                        {resItem.title || 'Attached Resource'}
                                       </span>
-                                    </label>
-
-                                    {resItem.url && (
-                                      <a
-                                        href={resItem.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors shrink-0"
-                                        title="Open and test resource"
-                                      >
-                                        <ExternalLink className="w-3.5 h-3.5" />
-                                      </a>
-                                    )}
+                                      <span className="text-[10px] font-mono text-purple-700 font-bold uppercase tracking-wider">
+                                        {resItem.type === 'pdf' ? 'PDF Document' : resItem.type === 'link' ? 'Web Link' : resItem.type || 'Resource'}
+                                      </span>
+                                    </div>
                                   </div>
+
+                                  {resItem.url && (
+                                    <a
+                                      href={resItem.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="py-1 px-2.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
+                                      title="Open resource"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      <span>View</span>
+                                    </a>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -3767,17 +3885,18 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
             </div>
 
             {/* Save Action */}
-            <div className="flex items-center justify-between pt-4 border-t border-purple-100">
-              <span className="text-xs text-slate-500 font-medium">
-                Configuring all {curriculumCalendarDays.length} training days for {curriculumBatch.name}
-              </span>
-              <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-purple-100">
+              <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
+                <Info className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>Curriculum & tasks are read-only here. To edit task definitions, visit the <strong>Curriculum & Tasks</strong> tab.</span>
+              </div>
+              <div className="flex gap-3 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => setShowCurriculumModal(false)}
                   className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors"
                 >
-                  Cancel
+                  {isEditingDates ? 'Cancel' : 'Close'}
                 </button>
                 <button
                   type="button"
@@ -3785,8 +3904,8 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                   onClick={handleSaveCurriculumSubmit}
                   className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2"
                 >
-                  {savingCurriculum ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />}
-                  <span>{savingCurriculum ? 'Saving Schedule...' : 'Save Calendar & Curriculum'}</span>
+                  {savingCurriculum ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>{savingCurriculum ? 'Saving Schedule...' : 'Save Calendar Dates'}</span>
                 </button>
               </div>
             </div>
@@ -3795,21 +3914,21 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
         </div>
       )}
 
-      {/* SYSTEM & TRAINING SETTINGS FULL PAGE */}
-      {staffTab === 'settings' && (
+      {/* CURRICULUM & TASK CONFIGURATION FULL PAGE */}
+      {staffTab === 'curriculum' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* Section Header Card */}
           <div className="pro-card rounded-3xl p-6 bg-gradient-to-r from-white via-purple-50/40 to-purple-100/30 border-purple-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-purple-700 text-xs font-bold uppercase tracking-wider mb-1">
-                <Settings className="w-4 h-4 text-purple-700" />
-                <span>Admin Settings • System Configuration</span>
+                <BookOpen className="w-4 h-4 text-purple-700" />
+                <span>Curriculum & Task Architecture Hub</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                System & Training Settings
+                Curriculum & Tasks
               </h2>
               <p className="text-slate-600 text-xs sm:text-sm mt-0.5 font-medium">
-                Manage curriculum task configurations, multi-task requirements, learning resources, and daily attendance marking cutoff windows.
+                Configure training levels, days, task requirements, and learning resources (PDFs, docs, and links).
               </p>
             </div>
 
@@ -3823,82 +3942,20 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                 <span>Back to Batches</span>
               </button>
 
-              {settingsSectionTab === 'tasks' && (
-                <button
-                  type="button"
-                  disabled={savingSettingsTasks}
-                  onClick={handleSaveSettingsTasks}
-                  className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all"
-                >
-                  {savingSettingsTasks ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>Save Tasks & Days</span>
-                </button>
-              )}
-
-              {settingsSectionTab === 'attendance' && (
-                <button
-                  type="button"
-                  disabled={savingAttendanceSettings}
-                  onClick={handleSaveAttendanceSettings}
-                  className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all"
-                >
-                  {savingAttendanceSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>Save Attendance Settings</span>
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={savingSettingsTasks}
+                onClick={handleSaveSettingsTasks}
+                className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all"
+              >
+                {savingSettingsTasks ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>Save Tasks & Days</span>
+              </button>
             </div>
           </div>
 
-          {/* Section Tabs */}
-          <div className="pro-card rounded-2xl p-2 bg-white/95 border-purple-200/90 flex flex-wrap items-center gap-2 shadow-xs">
-            <button
-              type="button"
-              onClick={() => setSettingsSectionTab('tasks')}
-              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                settingsSectionTab === 'tasks'
-                  ? 'bg-purple-900 text-white shadow-md'
-                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Task / Curriculum Configuration</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSettingsSectionTab('attendance')}
-              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                settingsSectionTab === 'attendance'
-                  ? 'bg-purple-900 text-white shadow-md'
-                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>Attendance Window Settings</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSettingsSectionTab('drive');
-                fetchDriveSettings();
-              }}
-              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                settingsSectionTab === 'drive'
-                  ? 'bg-purple-900 text-white shadow-md'
-                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
-              }`}
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Google Drive Storage Settings</span>
-              <span className={`w-2 h-2 rounded-full ml-0.5 ${driveStorageInfo?.isConnected ? 'bg-emerald-500' : driveStorageInfo?.hasConnectionRecord ? 'bg-amber-500' : 'bg-rose-400'}`} />
-            </button>
-          </div>
-
-          {settingsSectionTab === 'tasks' ? (
-            <>
-              {/* Level Sub-tabs Selector & Total Days Control */}
-              <div className="pro-card rounded-2xl p-3 bg-gradient-to-r from-purple-50/70 to-indigo-50/70 border-purple-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+          {/* Level Sub-tabs Selector & Total Days Control */}
+          <div className="pro-card rounded-2xl p-3 bg-gradient-to-r from-purple-50/70 to-indigo-50/70 border-purple-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-2 flex-1 overflow-x-auto pb-1 sm:pb-0">
                   {configuredLevels.map((lvl) => {
                     const displayName = (settingsActiveLevel === lvl ? settingsLevelName : levelDisplayNames[lvl]) || LEVEL_CONFIG[lvl]?.name || lvl;
@@ -3958,13 +4015,13 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
               {/* ADD NEW TRAINING LEVEL MODAL OVERLAY */}
               {showAddLevelModal && (
                 <div
-                  className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+                  className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
                   onClick={(e) => {
                     if (e.target === e.currentTarget && !creatingLevel) setShowAddLevelModal(false);
                   }}
                 >
                   <div
-                    className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+                    className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-between border-b border-purple-100 pb-3">
@@ -4446,9 +4503,337 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                   </button>
                 </div>
               </div>
-            </>
-          ) : settingsSectionTab === 'attendance' ? (
-            /* Attendance Window Settings Tab */
+        </div>
+      )}
+
+      {/* SYSTEM SETTINGS FULL PAGE */}
+      {staffTab === 'settings' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Section Header Card */}
+          <div className="pro-card rounded-3xl p-6 bg-gradient-to-r from-white via-purple-50/40 to-purple-100/30 border-purple-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-purple-700 text-xs font-bold uppercase tracking-wider mb-1">
+                <Settings className="w-4 h-4 text-purple-700" />
+                <span>Admin Settings • System Configuration</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                System Settings
+              </h2>
+              <p className="text-slate-600 text-xs sm:text-sm mt-0.5 font-medium">
+                Manage portal branding, page title & details, daily attendance marking windows, and Google Drive cloud storage.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('batches')}
+                className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back to Batches</span>
+              </button>
+
+              {settingsSectionTab === 'pageDetails' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetPageSettingsToDefault}
+                    className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors cursor-pointer"
+                  >
+                    Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingPageSettings}
+                    onClick={handleSavePageSettings}
+                    className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all cursor-pointer"
+                  >
+                    {savingPageSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Save Page Details</span>
+                  </button>
+                </div>
+              )}
+
+              {settingsSectionTab === 'attendance' && (
+                <button
+                  type="button"
+                  disabled={savingAttendanceSettings}
+                  onClick={handleSaveAttendanceSettings}
+                  className="py-2.5 px-5 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all cursor-pointer"
+                >
+                  {savingAttendanceSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Save Attendance Settings</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Section Tabs: Page Details, Attendance & Drive */}
+          <div className="pro-card rounded-2xl p-2 bg-white/95 border-purple-200/90 flex flex-wrap items-center gap-2 shadow-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsSectionTab('pageDetails');
+                fetchPageSettings();
+              }}
+              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                settingsSectionTab === 'pageDetails'
+                  ? 'bg-purple-900 text-white shadow-md'
+                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>Page Title & Branding Details</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSettingsSectionTab('attendance')}
+              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                settingsSectionTab === 'attendance'
+                  ? 'bg-purple-900 text-white shadow-md'
+                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Attendance Window Settings</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsSectionTab('drive');
+                fetchDriveSettings();
+              }}
+              className={`py-2.5 px-5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                settingsSectionTab === 'drive'
+                  ? 'bg-purple-900 text-white shadow-md'
+                  : 'bg-purple-50/70 text-slate-700 hover:bg-purple-100/80 border border-purple-200/70'
+              }`}
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Google Drive Storage Settings</span>
+              <span className={`w-2 h-2 rounded-full ml-0.5 ${driveStorageInfo?.isConnected ? 'bg-emerald-500' : driveStorageInfo?.hasConnectionRecord ? 'bg-amber-500' : 'bg-rose-400'}`} />
+            </button>
+          </div>
+
+          {/* TAB 1: PAGE TITLE & BRANDING DETAILS */}
+          {settingsSectionTab === 'pageDetails' && (
+            <div className="space-y-6">
+              <div className="pro-card rounded-2xl p-5 bg-purple-50/70 border border-purple-200 text-xs text-purple-950 leading-relaxed font-medium flex items-start gap-3">
+                <Info className="w-5 h-5 text-purple-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold text-slate-900 mb-0.5">Customize Page Title & Portal Details</strong>
+                  Change the application branding, navigation bar title, edition badge, page subtitle, browser tab title, institutional details, and footer text. Updates reflect immediately across the entire portal.
+                </div>
+              </div>
+
+              {loadingPageSettings ? (
+                <div className="pro-card rounded-3xl p-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-purple-600" />
+                  <span className="text-xs font-bold text-slate-700">Loading page settings & branding...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Card 1: Navbar & Header Branding */}
+                  <div className="pro-card rounded-3xl p-6 bg-white border border-purple-200 shadow-sm space-y-5">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-purple-100">
+                      <div className="p-2 rounded-xl bg-purple-100 text-purple-800">
+                        <LayoutDashboard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wider text-purple-950">
+                          Portal Header Branding
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium">Main application title and header subtitle</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Page / Application Title <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={pageTitle}
+                          onChange={(e) => setPageTitle(e.target.value)}
+                          placeholder="e.g. AR/VR ACADEMY"
+                          className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-white"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                          Displayed in the top navigation bar brand section.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Edition / Status Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={pageBadge}
+                            onChange={(e) => setPageBadge(e.target.value)}
+                            placeholder="e.g. ENTERPRISE, PRO, ACADEMY"
+                            className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-purple-950 bg-white border-purple-300"
+                          />
+                          <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                            Small pill badge next to the title (optional).
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Organization / COE Short Tag
+                          </label>
+                          <input
+                            type="text"
+                            value={orgName}
+                            onChange={(e) => setOrgName(e.target.value)}
+                            placeholder="e.g. AR/VR COE"
+                            className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-white"
+                          />
+                          <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                            Institutional tag used in Admin headers.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Page Subtitle / Tagline
+                        </label>
+                        <input
+                          type="text"
+                          value={pageSubtitle}
+                          onChange={(e) => setPageSubtitle(e.target.value)}
+                          placeholder="e.g. Spatial Computing & Immersive Training Hub"
+                          className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 bg-white"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                          Subtext displayed beneath the title in the navigation bar.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Browser Tab & SEO Details */}
+                  <div className="pro-card rounded-3xl p-6 bg-white border border-purple-200 shadow-sm space-y-5">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-purple-100">
+                      <div className="p-2 rounded-xl bg-purple-100 text-purple-800">
+                        <Globe className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wider text-purple-950">
+                          Browser Window & Page Details
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium">Browser tab title, overview, and contact info</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Browser Tab Title (&lt;title&gt;) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={browserTitle}
+                          onChange={(e) => setBrowserTitle(e.target.value)}
+                          placeholder="e.g. AR/VR Spatial Computing Academy | Immersive Training Platform"
+                          className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-white"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                          Appears in the browser tab and bookmarks.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Page Description & Details
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={pageDescription}
+                          onChange={(e) => setPageDescription(e.target.value)}
+                          placeholder="Brief description of the training academy and portal features..."
+                          className="w-full pro-input rounded-xl p-3.5 text-xs font-medium text-slate-800 bg-white leading-relaxed resize-y"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                          Comprehensive summary used for page metadata and portal overview.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Footer Text & Copyright
+                          </label>
+                          <input
+                            type="text"
+                            value={footerText}
+                            onChange={(e) => setFooterText(e.target.value)}
+                            placeholder="e.g. AR/VR Spatial Computing Academy © 2026"
+                            className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-900 bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            Support / Helpdesk Email
+                          </label>
+                          <input
+                            type="email"
+                            value={supportEmail}
+                            onChange={(e) => setSupportEmail(e.target.value)}
+                            placeholder="e.g. support@arvr.com"
+                            className="w-full pro-input rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-900 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Action Buttons */}
+              <div className="pro-card rounded-2xl p-4 bg-white border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+                <span className="text-xs text-slate-500 font-medium">
+                  Changes apply dynamically across the entire website and all user sessions.
+                </span>
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleTabSwitch('batches')}
+                    className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors cursor-pointer"
+                  >
+                    Back to Batches
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetPageSettingsToDefault}
+                    className="py-2.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingPageSettings}
+                    onClick={handleSavePageSettings}
+                    className="py-2.5 px-6 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all cursor-pointer"
+                  >
+                    {savingPageSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Save Page Details</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: ATTENDANCE WINDOW SETTINGS */}
+          {settingsSectionTab === 'attendance' && (
             <div className="space-y-6">
               <div className="pro-card rounded-2xl p-5 bg-purple-50/70 border border-purple-200 text-xs text-purple-950 leading-relaxed font-medium flex items-start gap-3">
                 <Info className="w-5 h-5 text-purple-700 shrink-0 mt-0.5" />
@@ -4564,7 +4949,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                   <button
                     type="button"
                     onClick={() => handleTabSwitch('batches')}
-                    className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors"
+                    className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-slate-700 text-xs font-bold hover:bg-purple-100 transition-colors cursor-pointer"
                   >
                     Back to Batches
                   </button>
@@ -4572,7 +4957,7 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                     type="button"
                     disabled={savingAttendanceSettings}
                     onClick={handleSaveAttendanceSettings}
-                    className="py-2.5 px-6 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all"
+                    className="py-2.5 px-6 rounded-xl pro-button-primary text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 hover:scale-[1.01] transition-all cursor-pointer"
                   >
                     {savingAttendanceSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     <span>Save Attendance Settings</span>
@@ -4580,7 +4965,10 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* TAB 3: GOOGLE DRIVE STORAGE SETTINGS */}
+          {settingsSectionTab === 'drive' && (
             /* Google Drive OAuth Connection Tab */
             <div className="space-y-6">
               <div className="pro-card rounded-3xl p-6 sm:p-8 bg-white border border-purple-200 shadow-sm space-y-6">
@@ -4748,8 +5136,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* REGENERATE CALENDAR CONFIRMATION MODAL OVERLAY */}
       {showRegenerateConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowRegenerateConfirmModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center gap-3 text-amber-700 bg-amber-50 p-3 rounded-2xl border border-amber-200">
               <AlertCircle className="w-6 h-6 shrink-0 text-amber-600" />
               <h3 className="text-sm font-extrabold text-amber-950">Confirm Calendar Regeneration</h3>
@@ -4761,14 +5155,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
               <button
                 type="button"
                 onClick={() => setShowRegenerateConfirmModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRegenerateCalendar}
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors shadow-md"
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors shadow-md cursor-pointer"
               >
                 Regenerate
               </button>
@@ -4779,8 +5173,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* BATCH DETAILS MODAL OVERLAY */}
       {showBatchDetailsModal && selectedBatchDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowBatchDetailsModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div>
                 <span className="text-[10px] font-mono tracking-widest text-purple-700 font-extrabold uppercase">AR/VR COE</span>
@@ -4866,9 +5266,19 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
         let certReadyCount = 0;
         let pendingCount = 0;
 
-        const calendarDaysSorted = [...curriculumCalendarDays].sort((a: any, b: any) => b.dayNumber - a.dayNumber);
+        const effectiveCalendarDays = (curriculumCalendarDays && curriculumCalendarDays.length > 0)
+          ? curriculumCalendarDays
+          : (batchCalendar && batchCalendar.length > 0)
+            ? batchCalendar
+            : [];
+
+        const calendarDaysSorted = [...effectiveCalendarDays].sort((a: any, b: any) => b.dayNumber - a.dayNumber);
         const examDayObj = calendarDaysSorted[0];
-        const examDateStr = examDayObj ? (examDayObj.dateStr ? new Date(examDayObj.dateStr).toISOString().split('T')[0] : '') : (curriculumBatch?.endDate ? new Date(curriculumBatch.endDate).toISOString().split('T')[0] : '');
+        const examDateStr = examDayObj 
+          ? (examDayObj.dateStr 
+              ? new Date(examDayObj.dateStr).toISOString().split('T')[0] 
+              : (examDayObj.date ? new Date(examDayObj.date).toISOString().split('T')[0] : ''))
+          : (selectedBatch?.endDate ? new Date(selectedBatch.endDate).toISOString().split('T')[0] : '');
 
         const certRoster = batchStudents.map((s) => {
           const fnCount = (s.attendances || []).filter((a: any) => a.session === 'FN').length;
@@ -4876,8 +5286,44 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
           const totalAtt = (s.attendances || []).length;
           const attPct = maxSessions > 0 ? Math.round((totalAtt / maxSessions) * 100) : 0;
 
-          const taskCount = (s.tasks || []).length;
-          const taskPct = totalDays > 0 ? Math.round((taskCount / totalDays) * 100) : 0;
+          // Detailed task breakdown per day
+          const studentTasks = s.tasks || [];
+          const effectiveDaysCount = Math.max(totalDays, effectiveCalendarDays.length || 0);
+
+          const tasksBreakdown = Array.from({ length: effectiveDaysCount }, (_, idx) => {
+            const dayNum = idx + 1;
+            const calDay = effectiveCalendarDays.find((cd: any) => cd.dayNumber === dayNum);
+            const taskTitle = calDay?.taskTitle 
+              || (calDay?.tasks && calDay.tasks[0]?.title) 
+              || `Day ${dayNum} Practical Task`;
+            const taskDescription = calDay?.taskDescription || (calDay?.tasks && calDay.tasks[0]?.description) || '';
+
+            const submission = studentTasks.find((t: any) => {
+              if (calDay?.id && t.trainingDayId === calDay.id) return true;
+              if (t.trainingDay?.dayNumber === dayNum) return true;
+              if (t.dayNumber === dayNum) return true;
+              return false;
+            });
+
+            const isCompleted = Boolean(submission);
+
+            return {
+              dayNumber: dayNum,
+              title: taskTitle,
+              description: taskDescription,
+              isCompleted,
+              status: submission ? (submission.status || 'SUBMITTED') : 'NOT_SUBMITTED',
+              submittedAt: submission?.submittedAt,
+              screenshotUrl: submission?.screenshotUrl,
+              evaluation: submission?.evaluation,
+            };
+          });
+
+          const completedTasks = tasksBreakdown.filter((t) => t.isCompleted);
+          const missingTasks = tasksBreakdown.filter((t) => !t.isCompleted);
+          const taskCount = completedTasks.length > 0 ? completedTasks.length : (s.tasks || []).length;
+          const missingCount = Math.max(0, effectiveDaysCount - taskCount);
+          const taskPct = effectiveDaysCount > 0 ? Math.round((taskCount / effectiveDaysCount) * 100) : 0;
           
           const evalCount = (s.evaluations || []).length;
 
@@ -4928,7 +5374,11 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
             totalAtt,
             attPct,
             taskCount,
+            missingCount,
             taskPct,
+            tasksBreakdown,
+            completedTasks,
+            missingTasks,
             evalCount,
             isCompleted,
             isEligible,
@@ -5470,10 +5920,19 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
             {/* TAB 4: TASK COMPLETION REPORT */}
             {certReportTab === 'tasks' && (
               <div className="pro-card rounded-3xl p-6 bg-white space-y-4">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <CheckSquare className="w-4 h-4 text-purple-700" />
-                  <span>Task Completion Report</span>
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <CheckSquare className="w-4 h-4 text-purple-700" />
+                    <span>Task Completion Report</span>
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <span className="flex items-center gap-1.5 bg-purple-50 text-purple-800 px-3 py-1 rounded-xl border border-purple-100/80 shadow-2xs">
+                      <Info className="w-3.5 h-3.5 text-purple-600" />
+                      Hover any task number to view completed & missing tasks
+                    </span>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -5487,17 +5946,263 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
                     </thead>
                     <tbody className="divide-y divide-purple-100/60 font-medium">
                       {certRoster.map((item) => (
-                        <tr key={item.id}>
+                        <tr key={item.id} className="hover:bg-purple-50/30 transition-colors">
                           <td className="p-3 font-bold text-slate-900">{item.name}</td>
                           <td className="p-3 font-mono font-bold text-purple-900">{item.registerNo}</td>
-                          <td className="p-3 text-center font-mono font-bold text-emerald-800">{item.taskCount}</td>
-                          <td className="p-3 text-center font-mono font-bold text-rose-800">{Math.max(0, totalDays - item.taskCount)}</td>
-                          <td className="p-3 text-right font-mono font-bold text-purple-950">{item.taskPct}%</td>
+                          
+                          {/* SUBMITTED TASKS with Hover Tooltip Trigger */}
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onMouseEnter={(e) => handleTaskNumberMouseEnter(item, 'submitted', e)}
+                              onMouseLeave={handleTaskNumberMouseLeave}
+                              onClick={(e) => handleTaskNumberMouseEnter(item, 'submitted', e)}
+                              className="inline-flex items-center justify-center gap-1.5 min-w-[38px] px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-mono font-bold text-xs border border-emerald-200 shadow-2xs cursor-pointer transition-all hover:scale-105 active:scale-95 group"
+                              title="Hover to view completed & missing tasks"
+                            >
+                              <span>{item.taskCount}</span>
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 opacity-60 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          </td>
+
+                          {/* MISSING TASKS with Hover Tooltip Trigger */}
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onMouseEnter={(e) => handleTaskNumberMouseEnter(item, 'missing', e)}
+                              onMouseLeave={handleTaskNumberMouseLeave}
+                              onClick={(e) => handleTaskNumberMouseEnter(item, 'missing', e)}
+                              className="inline-flex items-center justify-center gap-1.5 min-w-[38px] px-2.5 py-1 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-800 font-mono font-bold text-xs border border-rose-200 shadow-2xs cursor-pointer transition-all hover:scale-105 active:scale-95 group"
+                              title="Hover to view completed & missing tasks"
+                            >
+                              <span>{item.missingCount}</span>
+                              <XCircle className="w-3 h-3 text-rose-600 opacity-60 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          </td>
+
+                          {/* TASK COMPLETION with Hover Tooltip Trigger */}
+                          <td className="p-3 text-right">
+                            <button
+                              type="button"
+                              onMouseEnter={(e) => handleTaskNumberMouseEnter(item, 'all', e)}
+                              onMouseLeave={handleTaskNumberMouseLeave}
+                              onClick={(e) => handleTaskNumberMouseEnter(item, 'all', e)}
+                              className="inline-flex items-center gap-1.5 font-mono font-bold text-purple-950 hover:text-purple-700 cursor-pointer transition-colors"
+                              title="Hover to view task breakdown"
+                            >
+                              <span>{item.taskPct}%</span>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+
+                {/* FLOATING HOVER TOOLTIP FOR TASK BREAKDOWN */}
+                {hoveredTaskTip && (() => {
+                  const tipWidth = 380;
+                  let left = hoveredTaskTip.rect.left + hoveredTaskTip.rect.width / 2 - tipWidth / 2;
+                  if (left < 16) left = 16;
+                  if (typeof window !== 'undefined' && left + tipWidth > window.innerWidth - 16) {
+                    left = window.innerWidth - tipWidth - 16;
+                  }
+
+                  const spaceBelow = typeof window !== 'undefined' ? window.innerHeight - hoveredTaskTip.rect.bottom : 500;
+                  const showAbove = spaceBelow < 380 && hoveredTaskTip.rect.top > 380;
+                  const top = showAbove ? undefined : hoveredTaskTip.rect.bottom + 8;
+                  const bottom = showAbove && typeof window !== 'undefined' ? (window.innerHeight - hoveredTaskTip.rect.top + 8) : undefined;
+                  const arrowLeft = Math.max(20, Math.min(tipWidth - 20, hoveredTaskTip.rect.left + hoveredTaskTip.rect.width / 2 - left));
+
+                  const completedPercent = hoveredTaskTip.totalDays > 0 
+                    ? Math.round((hoveredTaskTip.completedTasks.length / hoveredTaskTip.totalDays) * 100) 
+                    : 0;
+
+                  return (
+                    <div
+                      onMouseEnter={handleTooltipMouseEnter}
+                      onMouseLeave={handleTooltipMouseLeave}
+                      style={{
+                        position: 'fixed',
+                        left: `${left}px`,
+                        top: top != null ? `${top}px` : undefined,
+                        bottom: bottom != null ? `${bottom}px` : undefined,
+                        width: `${tipWidth}px`,
+                        zIndex: 9999,
+                      }}
+                      className="bg-white rounded-2xl shadow-2xl border border-purple-200/90 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      {/* Arrow Indicator pointing towards hovered number */}
+                      <div
+                        className={`absolute w-3.5 h-3.5 bg-white border-purple-200 ${
+                          showAbove ? '-bottom-1.5 border-b border-r' : '-top-1.5 border-t border-l'
+                        }`}
+                        style={{
+                          left: `${arrowLeft}px`,
+                          transform: 'translateX(-50%) rotate(45deg)',
+                        }}
+                      />
+
+                      {/* Header */}
+                      <div className="p-3.5 bg-gradient-to-r from-purple-50 via-slate-50 to-purple-50/60 border-b border-purple-100 flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold shadow-2xs">
+                            <CheckSquare className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-xs">{hoveredTaskTip.studentName}</span>
+                              <span className="font-mono text-[11px] font-bold text-purple-700 bg-purple-100/80 px-1.5 py-0.5 rounded border border-purple-200">
+                                {hoveredTaskTip.registerNo}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              {hoveredTaskTip.completedTasks.length} of {hoveredTaskTip.totalDays} tasks completed ({completedPercent}%)
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-sm font-mono font-black ${completedPercent === 100 ? 'text-emerald-600' : 'text-purple-900'}`}>
+                            {completedPercent}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Dual color progress bar */}
+                      <div className="px-3.5 pt-2 pb-1 bg-white">
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
+                          <div
+                            className="bg-emerald-500 h-full transition-all duration-300"
+                            style={{ width: `${completedPercent}%` }}
+                          />
+                          <div
+                            className="bg-rose-400 h-full transition-all duration-300"
+                            style={{ width: `${100 - completedPercent}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Filter Pills */}
+                      <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-slate-100 bg-slate-50/50">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setTipActiveFilter('all'); }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                            tipActiveFilter === 'all'
+                              ? 'bg-purple-700 text-white shadow-2xs'
+                              : 'text-slate-600 hover:bg-slate-200/60'
+                          }`}
+                        >
+                          All Tasks ({hoveredTaskTip.totalDays})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setTipActiveFilter('completed'); }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            tipActiveFilter === 'completed'
+                              ? 'bg-emerald-700 text-white shadow-2xs'
+                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/60'
+                          }`}
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                          <span>Completed ({hoveredTaskTip.completedTasks.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setTipActiveFilter('missing'); }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            tipActiveFilter === 'missing'
+                              ? 'bg-rose-700 text-white shadow-2xs'
+                              : 'text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/60'
+                          }`}
+                        >
+                          <X className="w-2.5 h-2.5" />
+                          <span>Missing ({hoveredTaskTip.missingTasks.length})</span>
+                        </button>
+                      </div>
+
+                      {/* Scrollable Tasks Body */}
+                      <div className="p-3 max-h-64 overflow-y-auto space-y-3 bg-white">
+                        {/* Completed Section */}
+                        {(tipActiveFilter === 'all' || tipActiveFilter === 'completed') && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 uppercase tracking-wider px-0.5">
+                              <span className="flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                Completed Tasks ({hoveredTaskTip.completedTasks.length})
+                              </span>
+                            </div>
+                            {hoveredTaskTip.completedTasks.length === 0 ? (
+                              <div className="text-[11px] text-slate-400 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                                No tasks submitted yet.
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                {hoveredTaskTip.completedTasks.map((t: any) => (
+                                  <div
+                                    key={t.dayNumber}
+                                    className="flex items-center gap-2 p-2 bg-emerald-50/40 rounded-xl border border-emerald-100/80 hover:bg-emerald-50/80 transition-colors"
+                                  >
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-200">
+                                      Day {t.dayNumber}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-bold text-slate-900 truncate leading-snug" title={t.title}>
+                                        {t.title}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200 shadow-2xs">
+                                      {t.evaluation?.score != null ? `Score: ${t.evaluation.score}` : 'Submitted'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Missing Section */}
+                        {(tipActiveFilter === 'all' || tipActiveFilter === 'missing') && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-rose-800 uppercase tracking-wider px-0.5">
+                              <span className="flex items-center gap-1.5">
+                                <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                Missing Tasks ({hoveredTaskTip.missingTasks.length})
+                              </span>
+                            </div>
+                            {hoveredTaskTip.missingTasks.length === 0 ? (
+                              <div className="text-[11px] text-emerald-700 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 flex items-center justify-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>All {hoveredTaskTip.totalDays} tasks completed! 🎉</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                {hoveredTaskTip.missingTasks.map((t: any) => (
+                                  <div
+                                    key={t.dayNumber}
+                                    className="flex items-center gap-2 p-2 bg-rose-50/30 rounded-xl border border-rose-100/70 hover:bg-rose-50/70 transition-colors"
+                                  >
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-mono font-bold border border-rose-200">
+                                      Day {t.dayNumber}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-bold text-slate-700 truncate leading-snug" title={t.title}>
+                                        {t.title}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-white px-1.5 py-0.5 rounded border border-rose-200 shadow-2xs">
+                                      Missing
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -5988,8 +6693,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* NEW STUDENT REGISTRATION MODAL OVERLAY */}
       {showNewRegisterModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <div 
+          onClick={() => setShowNewRegisterModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto cursor-default"
+          >
             
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div>
@@ -6176,8 +6887,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* REGISTRATION SUCCESS MODAL OVERLAY */}
       {showRegSuccessModal && registeredSuccessStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowRegSuccessModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
                 <CheckCircle2 className="w-6 h-6" />
@@ -6236,8 +6953,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* STUDENT PROFILE DETAILED WORKSPACE MODAL */}
       {showStudentProfileModal && profileStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+        <div 
+          onClick={() => setShowStudentProfileModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto cursor-default"
+          >
             
             {/* Profile Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-purple-100 pb-4">
@@ -6415,8 +7138,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* EDIT STUDENT MODAL OVERLAY */}
       {showEditStudentModal && editStudentData && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowEditStudentModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div>
                 <span className="text-[10px] font-mono tracking-widest text-purple-700 font-extrabold uppercase">ADMIN ACTIONS</span>
@@ -6552,8 +7281,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* ADMIN PROFILE MODAL */}
       {showAdminProfileModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowAdminProfileModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-purple-900 text-white flex items-center justify-center font-bold text-sm">
@@ -6605,8 +7340,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
       {showCertRecordModal && selectedCertRecordStudent && (() => {
         const batchObj = batches.find((b) => b.id === selectedBatchId);
         return (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div 
+            onClick={() => setShowCertRecordModal(false)}
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl border border-purple-200 max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+            >
               <div className="flex items-center justify-between border-b border-purple-100 pb-4">
                 <div>
                   <span className="text-[10px] font-mono tracking-widest text-purple-700 font-extrabold uppercase">CERTIFICATE RECORD</span>
@@ -6708,8 +7449,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
         const isCurrentlyValid = existingCert ? (existingCert.isValid !== false && (isAtt100 || existingCert.isManualOverride)) : false;
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl border border-purple-200 max-w-xl w-full p-6 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto max-h-[92vh] overflow-y-auto">
+          <div 
+            onClick={() => setShowManualOverrideModal(false)}
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl border border-purple-200 max-w-xl w-full p-6 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto max-h-[92vh] overflow-y-auto cursor-default"
+            >
               
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-purple-100 pb-4">
@@ -6987,8 +7734,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* EDIT TASK MODAL OVERLAY */}
       {showEditTaskModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          onClick={() => setShowEditTaskModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-purple-200 max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-purple-100 pb-4">
               <div>
                 <span className="text-[10px] font-mono tracking-widest text-purple-700 font-extrabold uppercase">TASK MANAGEMENT</span>
@@ -7061,8 +7814,20 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
           evaluatingTask.trainingDay?.taskTitle?.toLowerCase().includes('examination');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="eval-modal-title">
-            <div className="bg-white rounded-3xl border border-purple-200 max-w-3xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+          <div 
+            onClick={() => {
+              setEvaluatingTask(null);
+              setSelectedSubmissionStudent(null);
+            }}
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer" 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="eval-modal-title"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl border border-purple-200 max-w-3xl w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto cursor-default"
+            >
               
               {/* Header Context */}
               <div className="flex items-center justify-between border-b border-purple-100 pb-4">
@@ -7379,8 +8144,14 @@ export default function StaffPortal({ user, onLoginSuccess }: StaffPortalProps) 
 
       {/* Bulk CSV Roster Import Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="pro-card rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl border border-purple-200 bg-white">
+        <div 
+          onClick={() => setShowImportModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="pro-card rounded-3xl p-6 max-w-xl w-full space-y-4 shadow-2xl border border-purple-200 bg-white cursor-default"
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 tracking-tight">
                 <UploadCloud className="w-5 h-5 text-purple-700" />
