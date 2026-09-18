@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# Next.js
+ARVR/.next/
+ARVR/out/
+
+# Node
+ARVR/node_modules/
+ARVR/npm-debug.log*
+ARVR/yarn-debug.log*
+ARVR/pnpm-debug.log*
+
+# Environment
+ARVR/.env
+ARVR/.env.local
+ARVR/.env.*.local
+
+# Local databases
+ARVR/.postgres-data/
+ARVR/dev.db
+ARVR/prisma/dev.db
+
+# Terraform generated files
+ARVR/deploy/aws/.terraform/
+ARVR/deploy/aws/*.tfstate
+ARVR/deploy/aws/*.tfstate.*
+ARVR/deploy/aws/crash.log
+ARVR/deploy/aws/.terraform.tfstate.lock.info
+
+# IDE
+.vscode/
+.idea/

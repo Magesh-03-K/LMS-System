@@ -1,0 +1,279 @@
+name: "Production Deployment (AWS OIDC + ECS Fargate)"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # Mandatory for AWS OIDC authentication
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'arvr-academy' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'arvr-academy-cluster-production' }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE || 'arvr-academy-service-production' }}
+  APP_HEALTH_URL: ${{ vars.APP_HEALTH_URL || 'https://academy.yourdomain.com/api/health' }}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Stage 1: Continuous Integration Validation Gate
+  # ----------------------------------------------------------------------------
+  ci-validation:
+    name: "CI Validation Gate"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript Type Check
+        run: npm run typecheck
+
+  # ----------------------------------------------------------------------------
+  # Stage 2: AWS OIDC Auth, Container Build & ECR Push
+  # ----------------------------------------------------------------------------
+  build-and-push:
+    name: "Build & Push to Amazon ECR"
+    needs: [ci-validation]
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+      image_uri: ${{ steps.build-image.outputs.image_uri }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Image Tag
+        id: set-tag
+        run: echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS Credentials via OIDC (Zero Static Keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build, Tag, and Push Image to Amazon ECR
+        id: build-image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.image_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------------------------
+  # Stage 3: Safe Pre-Deployment Database Migration
+  # Executes schema migrations inside an isolated one-off ECS Fargate task
+  # ----------------------------------------------------------------------------
+  database-migration:
+    name: "Pre-Deployment Database Migration"
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run Migration Fargate Task
+        id: run-migration
+        run: |
+          echo "Executing standalone database migration task..."
+          
+          # Fetch subnet and security group for task execution
+          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Tier,Values=PrivateApp" --query "Subnets[0].SubnetId" --output text)
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*ecs-tasks-sg*" --query "SecurityGroups[0].GroupId" --output text)
+          
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --task-definition arvr-academy-production \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SG_ID],assignPublicIp=DISABLED}" \
+            --overrides '{
+              "containerOverrides": [
+                {
+                  "name": "arvr-academy-app",
+                  "command": ["npx", "prisma", "migrate", "deploy"]
+                }
+              ]
+            }' \
+            --query "tasks[0].taskArn" --output text)
+          
+          echo "Migration task launched: $TASK_ARN"
+          echo "Waiting for task completion..."
+          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN
+          
+          # Check task exit status
+          EXIT_CODE=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query "tasks[0].containers[0].exitCode" --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "❌ ERROR: Database migration task failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "✅ Database schema migration applied successfully."
+
+  # ----------------------------------------------------------------------------
+  # Stage 4: ECS Fargate Rolling Deployment & Record Prior Revision
+  # ----------------------------------------------------------------------------
+  deploy-ecs:
+    name: "Rolling Deployment to ECS Fargate"
+    needs: [build-and-push, database-migration]
+    runs-on: ubuntu-latest
+    outputs:
+      prev_task_def: ${{ steps.record-prev.outputs.prev_task_def }}
+      new_task_def: ${{ steps.register-new.outputs.new_task_def }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Record Current Active Task Definition (For Rollback Target)
+        id: record-prev
+        run: |
+          CURRENT_TD=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --query "services[0].taskDefinition" --output text)
+          echo "Current active task definition: $CURRENT_TD"
+          echo "prev_task_def=$CURRENT_TD" >> $GITHUB_OUTPUT
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Register Updated Task Definition with New Image Tag
+        id: register-new
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-push.outputs.image_tag }}"
+          
+          # Download active task definition JSON and inject new image
+          aws ecs describe-task-definition --task-definition arvr-academy-production --query "taskDefinition" > current-td.json
+          
+          node -e "
+            const fs = require('fs');
+            const td = JSON.parse(fs.readFileSync('current-td.json'));
+            delete td.taskDefinitionArn;
+            delete td.revision;
+            delete td.status;
+            delete td.requiresAttributes;
+            delete td.compatibilities;
+            delete td.registeredAt;
+            delete td.registeredBy;
+            td.containerDefinitions[0].image = '$IMAGE_URI';
+            fs.writeFileSync('new-td.json', JSON.stringify(td, null, 2));
+          "
+          
+          NEW_TD_ARN=$(aws ecs register-task-definition --cli-input-json file://new-td.json --query "taskDefinition.taskDefinitionArn" --output text)
+          echo "Registered new task definition: $NEW_TD_ARN"
+          echo "new_task_def=$NEW_TD_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update ECS Service with Rolling Deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ steps.register-new.outputs.new_task_def }} \
+            --force-new-deployment
+
+      - name: Wait for Service Stability
+        run: |
+          echo "Waiting for ECS Fargate rolling update to complete..."
+          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }}
+          echo "✅ ECS Service is stable."
+
+  # ----------------------------------------------------------------------------
+  # Stage 5: Production Health Check & Automated Rollback
+  # ----------------------------------------------------------------------------
+  healthcheck-and-rollback:
+    name: "Production Health Check & Rollback"
+    needs: [deploy-ecs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify Live Application Health Probe
+        id: health-probe
+        run: |
+          echo "Probing production health endpoint: ${{ env.APP_HEALTH_URL }}"
+          MAX_RETRIES=10
+          DELAY=10
+          HEALTHY=false
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health probe attempt $i of $MAX_RETRIES..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" ${{ env.APP_HEALTH_URL }} || true)
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            echo "HTTP Status: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              DB_STATUS=$(echo "$BODY" | node -e "let d=''; process.stdin.on('data', c=>d+=c); process.stdin.on('end', ()=>{ try { const j=JSON.parse(d); console.log(j.checks?.database?.status); } catch { console.log('invalid'); } })")
+              if [ "$DB_STATUS" = "connected" ]; then
+                echo "✅ Health check PASSED: Status 200, Database connected."
+                HEALTHY=true
+                break
+              fi
+            fi
+            echo "Health check not ready yet. Retrying in ${DELAY}s..."
+            sleep $DELAY
+          done
+          
+          if [ "$HEALTHY" != "true" ]; then
+            echo "❌ Health check failed after $MAX_RETRIES attempts!"
+            exit 1
+          fi
+
+      - name: Execute Automated Rollback if Health Check Failed
+        if: failure()
+        run: |
+          echo "⚠️  CRITICAL: Production health check failed! Triggering automated rollback to previous revision..."
+          PREV_TD="${{ needs.deploy-ecs.outputs.prev_task_def }}"
+          
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition "$PREV_TD" \
+            --force-new-deployment
+            
+          echo "Rollback initiated to: $PREV_TD"
+          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }}
+          echo "✅ Rollback completed successfully. Production traffic restored to previous stable build."
+          exit 1

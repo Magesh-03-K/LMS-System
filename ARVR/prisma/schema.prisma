@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  name          String
+  registerNo    String   @unique
+  contactNumber String
+  email         String   @unique
+  department    String
+  year          String
+  section       String
+  batchId       String
+  batch         Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  pinHash       String
+  createdAt     DateTime @default(now())
+
+  attendances Attendance[]
+  tasks       TaskSubmission[]
+  evaluations Evaluation[]
+  feedback    Feedback[]
+  certificate CertificateRecord?
+
+  @@index([batchId])
+  @@index([department])
+  @@index([section])
+}
+
+model Admin {
+  id           String @id @default(cuid())
+  name         String
+  email        String @unique
+  passwordHash String
+}
+
+model Batch {
+  id                  String        @id @default(cuid())
+  name                String        @unique
+  batchNo             String?       @unique
+  level               String?       @default("Level 1")
+  startDate           DateTime
+  endDate             DateTime
+  trainingDays        Int
+  status              String        @default("ACTIVE")
+  curriculumStatus    String?       @default("Not Set")
+  googleDriveFolderId String?
+  students            Student[]
+  trainingCalendar    TrainingDay[]
+}
+
+model TrainingDay {
+  id              String           @id @default(cuid())
+  batchId         String
+  batch           Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  dayNumber       Int
+  date            DateTime
+  taskTitle       String
+  taskDescription String
+  tasks           Json?
+  resources       Json?
+  hasForenoon     Boolean          @default(true)
+  hasAfternoon    Boolean          @default(true)
+  submissions     TaskSubmission[]
+
+  @@unique([batchId, dayNumber])
+  @@index([batchId])
+  @@index([date])
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime
+  session   String
+  markedAt  DateTime @default(now())
+
+  @@unique([studentId, date, session])
+  @@index([studentId])
+  @@index([date])
+}
+
+model TaskSubmission {
+  id                  String      @id @default(cuid())
+  studentId           String
+  student             Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  trainingDayId       String
+  trainingDay         TrainingDay @relation(fields: [trainingDayId], references: [id], onDelete: Cascade)
+  screenshotUrl       String
+  description         String?
+  s3Key               String?
+  s3Bucket            String?
+  s3Region            String?
+  storageProvider     String?     @default("S3")
+  googleDriveFileId   String?
+  googleDriveFolderId String?
+  originalFilename    String?
+  storedFilename      String?
+  fileSize            Int?
+  fileType            String?
+  status              String      @default("SUBMITTED")
+  submittedAt         DateTime    @default(now())
+  evaluation          Evaluation?
+
+  @@unique([studentId, trainingDayId])
+  @@index([studentId])
+  @@index([trainingDayId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([s3Key])
+}
+
+model Evaluation {
+  id            String         @id @default(cuid())
+  studentId     String
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  taskId        String         @unique
+  task          TaskSubmission @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  score         Int
+  grade         String
+  trainingLevel String
+  comments      String?
+  evaluatedAt   DateTime       @default(now())
+
+  @@index([studentId])
+  @@index([evaluatedAt])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
+  @@index([createdAt])
+}
+
+model CertificateRecord {
+  id                   String    @id @default(cuid())
+  studentId            String    @unique
+  student              Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  certificateNo        String    @unique
+  finalGrade           String
+  finalLevel           String
+  completedAt          DateTime?
+  exportedAt           DateTime?
+  isValid              Boolean   @default(true)
+  isManualOverride     Boolean   @default(false)
+  overrideReason       String?
+  attendancePctAtIssue Int?
+
+  @@index([studentId])
+  @@index([completedAt])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model GoogleDriveConnection {
+  id                    String   @id @default(cuid())
+  adminId               String?  @unique
+  googleAccountEmail    String
+  refreshTokenEncrypted String
+  rootFolderId          String?
+  connectedAt           DateTime @default(now())
+  status                String   @default("CONNECTED")
+  updatedAt             DateTime @updatedAt
+}

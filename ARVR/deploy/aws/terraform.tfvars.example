@@ -1,0 +1,46 @@
+# ==============================================================================
+# AR/VR Academy — Production Terraform Variables Template
+# Copy this file to `terraform.tfvars` and fill in verified production values.
+# 🚨 DO NOT commit `terraform.tfvars` containing production credentials to Git.
+# ==============================================================================
+
+# Target AWS Deployment Region (Must match ALB, RDS, Redis, S3, and ACM Certificate)
+aws_region = "us-east-1"
+
+# Environment & Application Identifiers
+environment = "production"
+app_name    = "arvr-academy"
+
+# ------------------------------------------------------------------------------
+# BLOCKER 1: Production Custom Domain & ACM SSL Certificate
+# ------------------------------------------------------------------------------
+# Custom domain name (e.g. academy.yourinstitution.edu or lms.arvracademy.com)
+domain_name = "academy.yourinstitution.edu"
+
+# ARN of the pre-provisioned ACM SSL Certificate in us-east-1 covering the domain.
+# Leaving this blank prevents the HTTPS (443) listener from being provisioned.
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# ------------------------------------------------------------------------------
+# BLOCKER 3: GitHub Actions OIDC Repository Slug
+# ------------------------------------------------------------------------------
+# Repository slug in format 'owner/repo' permitted to assume the deployment IAM role.
+github_repo = "Livesh28/ARVR"
+
+# ------------------------------------------------------------------------------
+# Infrastructure Sizing & High Availability Parameters
+# ------------------------------------------------------------------------------
+# Amazon RDS PostgreSQL
+db_name                  = "arvr"
+db_username              = "arvr_admin"
+db_instance_class        = "db.t4g.medium"
+db_allocated_storage     = 50
+db_max_allocated_storage = 200
+
+# Amazon ElastiCache Redis
+redis_node_type = "cache.t4g.small"
+
+# ECS Fargate Tasks
+app_cpu       = 1024 # 1 vCPU
+app_memory    = 2048 # 2 GB
+desired_count = 2    # Multi-AZ HA minimum

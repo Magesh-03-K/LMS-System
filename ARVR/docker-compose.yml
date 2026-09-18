@@ -1,0 +1,167 @@
+# ==============================================================================
+# Docker Compose Orchestration - AR/VR Academy Production Stack
+# Services:
+#   - app: Next.js Standalone Application (Node.js 20 Alpine, Non-Root)
+#   - postgres: PostgreSQL 16 Alpine Database
+#   - redis: Redis 7 Alpine Cache & Distributed Rate Limiter
+#   - minio: Private S3-Compatible Object Storage for Task Uploads
+#   - minio-setup: Automated bucket initialization
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. AR/VR Academy Application Container
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: arvr-academy-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/arvr?schema=public"
+      SESSION_SECRET: "${SESSION_SECRET:-complex_production_secret_at_least_32_characters_long}"
+      REDIS_URL: "redis://redis:6379"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-minioadmin}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
+      AWS_S3_BUCKET_NAME: "${AWS_S3_BUCKET_NAME:-arvr-submissions-private}"
+      AWS_S3_ENDPOINT: "http://minio:9000"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_REDIRECT_URI: "${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/google-drive/oauth/callback}"
+      SKIP_MIGRATIONS: "false"
+      DB_WAIT_RETRIES: "30"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - arvr-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ----------------------------------------------------------------------------
+  # 2. PostgreSQL 16 Enterprise Relational Database
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: arvr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: arvr
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - arvr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d arvr"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 3. Redis 7 Distributed Cache & Rate Limiting Engine
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: arvr-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - arvr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 4. MinIO Private S3 Storage (Task Submissions)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: arvr-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - arvr-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 5. Automated S3 Bucket Initializer (Ephemeral setup container)
+  # ----------------------------------------------------------------------------
+  minio-setup:
+    image: minio/mc:latest
+    container_name: arvr-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - arvr-network
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb --ignore-existing myminio/arvr-submissions-private;
+      /usr/bin/mc anonymous set none myminio/arvr-submissions-private;
+      echo 'Private S3 bucket arvr-submissions-private initialized!';
+      exit 0;
+      "
+
+# ------------------------------------------------------------------------------
+# Persistent Storage Volumes
+# ------------------------------------------------------------------------------
+volumes:
+  postgres-data:
+    name: arvr_postgres_data
+  redis-data:
+    name: arvr_redis_data
+  minio-data:
+    name: arvr_minio_data
+
+# ------------------------------------------------------------------------------
+# Isolated Bridge Network
+# ------------------------------------------------------------------------------
+networks:
+  arvr-network:
+    name: arvr_network
+    driver: bridge
+arvr
