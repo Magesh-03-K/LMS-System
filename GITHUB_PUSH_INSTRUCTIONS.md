@@ -1,6 +1,6 @@
 # 🚀 Guide: Connecting & Pushing your LMS Project to GitHub
 
-This guide provides the exact steps to connect your local **LMS System** repository to your new GitHub repository (`https://github.com/ARVR-dlm/LMS-System.git`) and push all project code.
+This guide provides the exact steps to connect your local **LMS System** repository to your new GitHub repository (`https://github.com/Magesh-03-K/LMS-System.git`) and push all project code.
 
 ---
 
@@ -22,9 +22,9 @@ git commit -m "feat: initial commit for LMS System"
 ### Step 3: Set Remote URL to your GitHub Repo
 Update the existing remote `origin` to point to your new empty repository:
 ```bash
-git remote set-url origin https://github.com/ARVR-dlm/LMS-System.git
+git remote set-url origin https://github.com/Magesh-03-K/LMS-System.git
 ```
-> *(If `git remote` was not set before, use: `git remote add origin https://github.com/ARVR-dlm/LMS-System.git`)*
+> *(If `git remote` was not set before, use: `git remote add origin https://github.com/Magesh-03-K/LMS-System.git`)*
 
 ### Step 4: Set Branch Name to `main`
 Ensure your local branch is named `main`:

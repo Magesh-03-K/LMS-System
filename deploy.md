@@ -5,7 +5,7 @@ This guide walks you through pushing your project to GitHub, creating your Postg
 ---
 
 ## 📌 Prerequisites Checklist
-- [x] GitHub repository connected: `https://github.com/ARVR-dlm/LMS-System.git`
+- [x] GitHub repository connected: `https://github.com/Magesh-03-K/LMS-System.git`
 - [ ] [Render.com Account](https://render.com) (for PostgreSQL Database)
 - [ ] [Vercel.com Account](https://vercel.com) (for Next.js App & API routes)
 
@@ -68,7 +68,7 @@ DATABASE_URL="postgresql://arvr_user:password@dpg-xxx.render.com/arvr_academy?ss
 
 1. Log in to [Vercel Dashboard](https://vercel.com/dashboard).
 2. Click **Add New...** → **Project**.
-3. Import your GitHub repository: `ARVR-dlm/LMS-System`.
+3. Import your GitHub repository: `Magesh-03-K/LMS-System`.
 4. Configure Project Settings:
    - **Framework Preset**: `Next.js`
    - **Root Directory**: Click *Edit* and select **`ARVR`**
