@@ -14,9 +14,6 @@ An enterprise-grade, full-stack spatial computing training management platform b
 ### 2. 👨‍🏫 Staff & Trainer Portal
 ![Staff Portal Login](screenshots/staff-portal-login.png)
 
-### 3. 🚀 Vercel Production Deployment Status
-![Vercel Deployment Status](screenshots/vercel-deployment-success.png)
-
 ---
 
 ## ✨ Overview & Key Features
@@ -100,7 +97,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 ```text
 LMS_System/
 ├── README.md                 # Project Root Documentation
-├── deploy.md                 # Vercel & Render Deployment Guide
 ├── screenshots/              # Application Interface Screenshots
 └── ARVR/                     # AR/VR LMS Web Application
     ├── app/

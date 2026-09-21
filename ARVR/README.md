@@ -14,9 +14,6 @@ An enterprise-grade, full-stack spatial computing training management platform b
 ### 👨‍🏫 Staff & Trainer Portal Login
 ![Staff Portal Login](screenshots/staff-portal-login.png)
 
-### 🚀 Production Deployment on Vercel
-![Vercel Deployment Status](screenshots/vercel-deployment-success.png)
-
 ---
 
 ## ✨ Key Features & Capabilities
