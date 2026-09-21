@@ -1,6 +1,6 @@
 # 🚀 Guide: Connecting & Pushing your LMS Project to GitHub
 
-This guide provides the exact steps to connect your local **LMS System** repository to your new GitHub repository (`https://github.com/Magesh-03-K/LMS-System.git`) and push all project code.
+This guide provides the exact steps to connect your local **LMS System** repository to your new GitHub repository (`https://github.com/Magesh-03-K/LMS-System.git`) and push all project code..
 
 ---
 
