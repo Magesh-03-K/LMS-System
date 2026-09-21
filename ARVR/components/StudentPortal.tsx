@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   GraduationCap, KeyRound, Clock, CheckCircle2, AlertCircle,
   Upload, Send, Award, FileText, BarChart3, UserCheck, Sparkles, RefreshCw, ChevronRight, ExternalLink, BookOpen, Compass, Lock, Layers, Download,
@@ -207,6 +207,8 @@ export default function StudentPortal({ user, onLoginSuccess }: StudentPortalPro
   };
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleMarkAttendance = async (session: 'FN' | 'AN') => {
     setMarkingAttendance(session);
@@ -1134,10 +1136,18 @@ export default function StudentPortal({ user, onLoginSuccess }: StudentPortalPro
                   );
                 })()}
 
-                {todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an && (
+                {(todayTask?.attendanceToday?.fn || todayTask?.attendanceToday?.an || todayTask?.attendanceToday?.hasAnyAttendance) && (
                   <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
-                    <span>✓ Both FN & AN Attendance Verified for Today! Daily Task Unlocked &rarr;</span>
+                    <span>
+                      {todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an
+                        ? '✓ Both FN & AN Attendance Verified! Daily Task Unlocked →'
+                        : todayTask?.attendanceToday?.fn
+                          ? '✓ FN (Morning) Attendance Verified! Daily Task Unlocked →'
+                          : todayTask?.attendanceToday?.an
+                            ? '✓ AN (Afternoon) Attendance Verified! Daily Task Unlocked →'
+                            : '✓ Attendance Verified! Daily Task Unlocked →'}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1443,82 +1453,174 @@ export default function StudentPortal({ user, onLoginSuccess }: StudentPortalPro
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <form onSubmit={handleSubmitTask} className="space-y-4">
-                      {!(todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an) && (
-                        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
-                          <Lock className="w-5 h-5 shrink-0 text-amber-600" />
-                          <span>
-                            <strong>Task Submission Locked:</strong> You must mark both <strong>FN (Morning)</strong> and <strong>AN (Afternoon)</strong> attendance for today before uploading your project output.
-                          </span>
-                        </div>
-                      )}
+                  ) : (() => {
+                    const isTaskUnlocked = Boolean(
+                        todayTask?.isTaskUnlocked ||
+                        todayTask?.attendanceToday?.fn ||
+                        todayTask?.attendanceToday?.an ||
+                        todayTask?.attendanceToday?.hasAnyAttendance ||
+                        todayTask?.submission
+                      );
 
-                      <div>
-                        <label htmlFor="task-screenshot-file" className="block text-xs font-bold text-slate-700 mb-2">
-                          Upload Practical Execution Screenshot (PNG, JPG, WebP - Max 5MB)
-                        </label>
-                        <div className="border-2 border-dashed border-purple-200 hover:border-purple-400 rounded-2xl p-5 text-center bg-purple-50/40 transition-colors">
-                          {selectedFile ? (
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-900">
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                                <span className="truncate">{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedFile(null)}
-                                className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors shrink-0"
-                              >
-                                Change File
-                              </button>
+                      return (
+                        <form onSubmit={handleSubmitTask} className="space-y-4">
+                          {!isTaskUnlocked && (
+                            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
+                              <Lock className="w-5 h-5 shrink-0 text-amber-600" />
+                              <span>
+                                <strong>Task Submission Locked:</strong> You must mark attendance for today before uploading your project output.
+                              </span>
                             </div>
-                          ) : (
-                            <>
-                              <Upload className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                              <input
-                                id="task-screenshot-file"
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0] || null;
-                                  setSelectedFile(file);
-                                }}
-                                disabled={!(todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an)}
-                                tabIndex={!(todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an) ? -1 : 0}
-                                className="text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:pro-button-primary file:text-white file:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:file:cursor-not-allowed disabled:file:bg-slate-200 disabled:file:text-slate-400 disabled:file:shadow-none disabled:file:from-slate-200 disabled:file:to-slate-200"
-                              />
-                              <p className="text-[11px] text-slate-500 mt-2">Or select an image file to auto-save to uploads/ folder</p>
-                            </>
                           )}
-                        </div>
-                      </div>
 
-                      <div>
-                        <label htmlFor="task-student-notes" className="block text-xs font-bold text-slate-700 mb-1.5">
-                          Student Implementation Notes & GitHub / Drive Link
-                        </label>
-                        <textarea
-                          id="task-student-notes"
-                          rows={3}
-                          placeholder="Describe your Unity setup, XR rig components used, or paste your repository link..."
-                          value={taskDescription}
-                          onChange={(e) => setTaskDescription(e.target.value)}
-                          disabled={!(todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an)}
-                          className="w-full pro-input rounded-xl px-4 py-2.5 text-xs placeholder-slate-400 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                      </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label htmlFor="task-screenshot-file" className="block text-xs font-bold text-slate-700">
+                                Upload Practical Execution Screenshot (PNG, JPG, WebP - Max 5MB)
+                              </label>
+                              {isTaskUnlocked && (
+                                <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                  ✓ Ready to upload
+                                </span>
+                              )}
+                            </div>
 
-                      <button
-                        type="submit"
-                        disabled={submittingTask || (!(todayTask?.attendanceToday?.fn && todayTask?.attendanceToday?.an) && !todayTask?.submission)}
-                        className="w-full py-3 px-4 rounded-xl pro-button-primary text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 shadow-md transition-all hover:scale-[1.01]"
-                      >
-                        {submittingTask ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        <span>{submittingTask ? 'Submitting Solution...' : todayTask?.submission ? 'Update Submitted Solution' : 'Submit Solution for Evaluation'}</span>
-                      </button>
-                    </form>
-                  )}
+                            <div
+                              onClick={() => {
+                                if (isTaskUnlocked && fileInputRef.current) {
+                                  fileInputRef.current.click();
+                                }
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                if (isTaskUnlocked) setIsDraggingFile(true);
+                              }}
+                              onDragLeave={() => setIsDraggingFile(false)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDraggingFile(false);
+                                if (isTaskUnlocked && e.dataTransfer.files?.[0]) {
+                                  const file = e.dataTransfer.files[0];
+                                  if (file.type.startsWith('image/')) {
+                                    setSelectedFile(file);
+                                  } else {
+                                    setErrorMsg('Please upload an image file (PNG, JPG, WebP).');
+                                  }
+                                }
+                              }}
+                              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+                                !isTaskUnlocked
+                                  ? 'border-slate-200 bg-slate-50/50 cursor-not-allowed opacity-75'
+                                  : isDraggingFile
+                                    ? 'border-purple-600 bg-purple-100/60 scale-[1.01] shadow-inner cursor-pointer'
+                                    : 'border-purple-200 hover:border-purple-400 bg-purple-50/40 hover:bg-purple-50/70 cursor-pointer group'
+                              }`}
+                            >
+                              {selectedFile ? (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-900 cursor-default"
+                                >
+                                  <div className="flex items-center gap-2 overflow-hidden">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                                    <span className="truncate">{selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedFile(null);
+                                        if (fileInputRef.current) fileInputRef.current.value = '';
+                                      }}
+                                      className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => fileInputRef.current?.click()}
+                                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      Change
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2.5">
+                                  <div className={`w-12 h-12 rounded-2xl mx-auto flex items-center justify-center transition-transform group-hover:scale-110 ${
+                                    !isTaskUnlocked ? 'bg-slate-200 text-slate-400' : 'bg-purple-100 text-purple-700 border border-purple-200 shadow-2xs'
+                                  }`}>
+                                    <Upload className="w-6 h-6" />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-bold text-slate-800">
+                                      {isTaskUnlocked ? (
+                                        <>
+                                          <span className="text-purple-700 group-hover:underline">Click anywhere here to choose file</span>
+                                          <span className="text-slate-500 font-normal"> or drag & drop</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-slate-500">Upload locked — mark your attendance first</span>
+                                      )}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400">PNG, JPG, WebP (up to 5MB)</p>
+                                  </div>
+
+                                  <input
+                                    ref={fileInputRef}
+                                    id="task-screenshot-file"
+                                    type="file"
+                                    accept="image/*"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0] || null;
+                                      setSelectedFile(file);
+                                    }}
+                                    disabled={!isTaskUnlocked}
+                                    tabIndex={!isTaskUnlocked ? -1 : 0}
+                                    className="hidden"
+                                  />
+
+                                  {isTaskUnlocked && (
+                                    <div className="pt-1">
+                                      <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-800 text-xs font-bold shadow-2xs group-hover:border-purple-400 group-hover:bg-purple-50 transition-colors">
+                                        <Upload className="w-3.5 h-3.5 text-purple-600" />
+                                        Choose Screenshot
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label htmlFor="task-student-notes" className="block text-xs font-bold text-slate-700 mb-1.5">
+                              Student Implementation Notes & GitHub / Drive Link
+                            </label>
+                            <textarea
+                              id="task-student-notes"
+                              rows={3}
+                              placeholder="Describe your Unity setup, XR rig components used, or paste your repository link..."
+                              value={taskDescription}
+                              onChange={(e) => setTaskDescription(e.target.value)}
+                              disabled={!isTaskUnlocked}
+                              className="w-full pro-input rounded-xl px-4 py-2.5 text-xs placeholder-slate-400 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={submittingTask || (!isTaskUnlocked && !todayTask?.submission)}
+                            className="w-full py-3 px-4 rounded-xl pro-button-primary text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 shadow-md transition-all hover:scale-[1.01]"
+                          >
+                            {submittingTask ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            <span>{submittingTask ? 'Submitting Solution...' : todayTask?.submission ? 'Update Submitted Solution' : 'Submit Solution for Evaluation'}</span>
+                          </button>
+                        </form>
+                      );
+                    })()}
 
                 </div>
               ) : (

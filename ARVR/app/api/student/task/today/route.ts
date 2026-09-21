@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { getMidnightDate, DEFAULT_TIMEZONE, getDetailedSessionStatus } from '@/lib/time';
+import { getMidnightDate, DEFAULT_TIMEZONE, getDetailedSessionStatus, getTodayDateString, isAttendanceMatchingDate } from '@/lib/time';
 import { getCachedSystemSettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
@@ -24,18 +24,20 @@ export async function GET(request: Request) {
     const timezone = settingsMap.get('PROGRAM_TIMEZONE') || DEFAULT_TIMEZONE;
 
     const todayDate = getMidnightDate(new Date(), timezone);
+    const todayStr = getTodayDateString(new Date(), timezone);
 
-    // Fetch attendance marked today for this student
-    const todayAttendances = await prisma.attendance.findMany({
-      where: {
-        studentId: student.id,
-        date: todayDate,
-      },
+    // Fetch all attendances for this student to robustly match across timezones
+    const allStudentAttendances = await prisma.attendance.findMany({
+      where: { studentId: student.id },
+      orderBy: { markedAt: 'desc' },
     });
+
+    const todayAttendances = allStudentAttendances.filter((a) =>
+      isAttendanceMatchingDate(a, todayStr, timezone)
+    );
 
     const hasFN = todayAttendances.some((a) => a.session === 'FN');
     const hasAN = todayAttendances.some((a) => a.session === 'AN');
-    const isUnlocked = hasFN && hasAN;
 
     // Find today's training day for the student's batch
     // We match by date or day number within batch date range
@@ -75,6 +77,17 @@ export async function GET(request: Request) {
         include: { evaluation: true },
       });
     }
+
+    let hasDayAttendance = false;
+    if (currentDay) {
+      const currentDayStr = getTodayDateString(new Date(currentDay.date), timezone);
+      hasDayAttendance = allStudentAttendances.some((a) =>
+        isAttendanceMatchingDate(a, currentDayStr, timezone)
+      );
+    }
+
+    const hasAnyAttendance = hasFN || hasAN || hasDayAttendance;
+    const isUnlocked = hasAnyAttendance || Boolean(submission);
 
     const fnStart = settingsMap.get('FN_START_TIME') || '08:45';
     const fnCutoff = settingsMap.get('FN_CUTOFF') || '09:15';
@@ -122,6 +135,7 @@ export async function GET(request: Request) {
       attendanceToday: {
         fn: hasFN,
         an: hasAN,
+        hasAnyAttendance,
         fnDetails,
         anDetails,
         currentZonedTime: fnDetails.currentZonedFormatted,

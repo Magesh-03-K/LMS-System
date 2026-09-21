@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { getMidnightDate, DEFAULT_TIMEZONE } from '@/lib/time';
+import { getTodayDateString, isAttendanceMatchingDate, DEFAULT_TIMEZONE } from '@/lib/time';
 import { generatePresignedUploadUrl, validateFileMetadata } from '@/lib/s3';
 import { getCachedSystemSettings } from '@/lib/settings';
 
@@ -34,39 +34,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Student or batch record not found' }, { status: 404 });
     }
 
-    // 3. Server-side Gate: Require BOTH FN and AN attendance for today
-    const settingsMap = await getCachedSystemSettings();
-    const timezone = settingsMap.get('PROGRAM_TIMEZONE') || DEFAULT_TIMEZONE;
-    const todayDate = getMidnightDate(new Date(), timezone);
-
-    const attendances = await prisma.attendance.findMany({
-      where: {
-        studentId: student.id,
-        date: todayDate,
-      },
-    });
-
-    const hasFN = attendances.some((a) => a.session === 'FN');
-    const hasAN = attendances.some((a) => a.session === 'AN');
-
-    if (!hasFN || !hasAN) {
-      return NextResponse.json(
-        {
-          error: 'Task submission is locked. You must mark both FN (morning) and AN (afternoon) attendance for today before requesting an upload URL.',
-          fnMarked: hasFN,
-          anMarked: hasAN,
-        },
-        { status: 403 }
-      );
-    }
-
-    // 4. Fetch TrainingDay details
+    // 3. Fetch TrainingDay details
     const trainingDay = await prisma.trainingDay.findUnique({
       where: { id: trainingDayId },
     });
 
     if (!trainingDay || trainingDay.batchId !== student.batchId) {
       return NextResponse.json({ error: 'Invalid training day or unauthorized batch' }, { status: 400 });
+    }
+
+    // 4. Server-side Gate: Require attendance for today, or for the training day, or existing submission
+    const existingSubmission = await prisma.taskSubmission.findUnique({
+      where: {
+        studentId_trainingDayId: {
+          studentId: student.id,
+          trainingDayId: trainingDay.id,
+        },
+      },
+    });
+
+    const settingsMap = await getCachedSystemSettings();
+    const timezone = settingsMap.get('PROGRAM_TIMEZONE') || DEFAULT_TIMEZONE;
+    const todayStr = getTodayDateString(new Date(), timezone);
+    const dayDateStr = getTodayDateString(new Date(trainingDay.date), timezone);
+
+    const attendances = await prisma.attendance.findMany({
+      where: { studentId: student.id },
+      orderBy: { markedAt: 'desc' },
+    });
+
+    const hasTodayAtt = attendances.some((a) => isAttendanceMatchingDate(a, todayStr, timezone));
+    const hasDayAtt = attendances.some((a) => isAttendanceMatchingDate(a, dayDateStr, timezone));
+
+    if (!hasTodayAtt && !hasDayAtt && !existingSubmission) {
+      return NextResponse.json(
+        {
+          error: 'Task submission is locked. You must mark attendance for today before requesting an upload URL.',
+        },
+        { status: 403 }
+      );
     }
 
     // 5. Generate secure S3 presigned PUT URL

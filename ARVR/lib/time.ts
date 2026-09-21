@@ -191,3 +191,35 @@ export function getDetailedSessionStatus(
     buttonLabel: `Mark ${session}`,
   };
 }
+
+/**
+ * Checks if a given Attendance record matches a target date string (yyyy-MM-dd)
+ * checking timezone-adjusted date, UTC date string, and markedAt timestamp.
+ */
+export function isAttendanceMatchingDate(
+  attendance: { date: Date | string; markedAt?: Date | string },
+  targetDateStr: string,
+  timezone: string = DEFAULT_TIMEZONE
+): boolean {
+  if (!attendance) return false;
+  try {
+    const attDate = typeof attendance.date === 'string' ? new Date(attendance.date) : attendance.date;
+    const attDateZonedStr = formatZoned(toZonedTime(attDate, timezone), 'yyyy-MM-dd', { timeZone: timezone });
+    if (attDateZonedStr === targetDateStr) return true;
+
+    const utcDateStr = attDate.toISOString().split('T')[0];
+    if (utcDateStr === targetDateStr) return true;
+
+    if (attendance.markedAt) {
+      const markedDate = typeof attendance.markedAt === 'string' ? new Date(attendance.markedAt) : attendance.markedAt;
+      const markedZonedStr = formatZoned(toZonedTime(markedDate, timezone), 'yyyy-MM-dd', { timeZone: timezone });
+      if (markedZonedStr === targetDateStr) return true;
+      const markedUtcStr = markedDate.toISOString().split('T')[0];
+      if (markedUtcStr === targetDateStr) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+

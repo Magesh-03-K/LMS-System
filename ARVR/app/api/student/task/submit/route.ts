@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { getMidnightDate, DEFAULT_TIMEZONE } from '@/lib/time';
+import { getTodayDateString, isAttendanceMatchingDate, DEFAULT_TIMEZONE } from '@/lib/time';
 import {
   getBucketName,
   getS3Client,
@@ -64,40 +64,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Student or batch record not found' }, { status: 404 });
     }
 
-    // 2. Server-side Attendance Gate: Require BOTH FN and AN attendance for today
-    const settings = await prisma.systemSetting.findMany();
-    const settingsMap = new Map(settings.map((s) => [s.key, s.value]));
-    const timezone = settingsMap.get('PROGRAM_TIMEZONE') || DEFAULT_TIMEZONE;
-    const todayDate = getMidnightDate(new Date(), timezone);
-
-    const attendances = await prisma.attendance.findMany({
-      where: {
-        studentId: student.id,
-        date: todayDate,
-      },
-    });
-
-    const hasFN = attendances.some((a) => a.session === 'FN');
-    const hasAN = attendances.some((a) => a.session === 'AN');
-
-    if (!hasFN || !hasAN) {
-      return NextResponse.json(
-        {
-          error: 'Task submission is locked. You must mark both FN (morning) and AN (afternoon) attendance for today before submitting your task solution.',
-          fnMarked: hasFN,
-          anMarked: hasAN,
-        },
-        { status: 403 }
-      );
-    }
-
-    // 3. Fetch TrainingDay details
+    // 2. Fetch TrainingDay details
     const trainingDay = await prisma.trainingDay.findUnique({
       where: { id: trainingDayId },
     });
 
     if (!trainingDay || trainingDay.batchId !== student.batchId) {
-      return NextResponse.json({ error: 'Invalid training day' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid training day or unauthorized batch' }, { status: 400 });
+    }
+
+    // Check if already has existing submission (allow update)
+    const existingSubmission = await prisma.taskSubmission.findUnique({
+      where: {
+        studentId_trainingDayId: {
+          studentId: student.id,
+          trainingDayId: trainingDay.id,
+        },
+      },
+    });
+
+    // 3. Server-side Attendance Gate: Require attendance for today, or for the training day, or existing submission
+    const settings = await prisma.systemSetting.findMany();
+    const settingsMap = new Map(settings.map((s) => [s.key, s.value]));
+    const timezone = settingsMap.get('PROGRAM_TIMEZONE') || DEFAULT_TIMEZONE;
+    const todayStr = getTodayDateString(new Date(), timezone);
+    const dayDateStr = getTodayDateString(new Date(trainingDay.date), timezone);
+
+    const attendances = await prisma.attendance.findMany({
+      where: { studentId: student.id },
+      orderBy: { markedAt: 'desc' },
+    });
+
+    const hasTodayAtt = attendances.some((a) => isAttendanceMatchingDate(a, todayStr, timezone));
+    const hasDayAtt = attendances.some((a) => isAttendanceMatchingDate(a, dayDateStr, timezone));
+
+    if (!hasTodayAtt && !hasDayAtt && !existingSubmission) {
+      return NextResponse.json(
+        {
+          error: 'Task submission is locked. You must mark attendance for today before submitting your task solution.',
+        },
+        { status: 403 }
+      );
     }
 
     let verifiedSize = fileSize;
@@ -168,14 +175,6 @@ export async function POST(request: Request) {
     }
 
     // 6. Check for existing submission to clean up previous S3 object (Orphan prevention)
-    const existingSubmission = await prisma.taskSubmission.findUnique({
-      where: {
-        studentId_trainingDayId: {
-          studentId: student.id,
-          trainingDayId: trainingDay.id,
-        },
-      },
-    });
 
     if (existingSubmission?.s3Key && finalS3Key && existingSubmission.s3Key !== finalS3Key) {
       // Remove old superseded file from S3
