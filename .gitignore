@@ -1,33 +1,66 @@
-# macOS
+# Operating System & IDE
 .DS_Store
-
-# Next.js
-ARVR/.next/
-ARVR/out/
-
-# Node
-ARVR/node_modules/
-ARVR/npm-debug.log*
-ARVR/yarn-debug.log*
-ARVR/pnpm-debug.log*
-
-# Environment
-ARVR/.env
-ARVR/.env.local
-ARVR/.env.*.local
-
-# Local databases
-ARVR/.postgres-data/
-ARVR/dev.db
-ARVR/prisma/dev.db
-
-# Terraform generated files
-ARVR/deploy/aws/.terraform/
-ARVR/deploy/aws/*.tfstate
-ARVR/deploy/aws/*.tfstate.*
-ARVR/deploy/aws/crash.log
-ARVR/deploy/aws/.terraform.tfstate.lock.info
-
-# IDE
+Thumbs.db
 .vscode/
 .idea/
+.windsurf/
+.claude/
+.agents/
+.details/
+scratch/
+CLAUDE.md
+
+# Node & Build Artifacts
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+build/
+**/build/
+dist/
+**/dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+ARVR/.env
+ARVR/.env.*
+!ARVR/.env.example
+
+# Database & Local Storage
+*.db
+*.sqlite
+*.backup
+dev.db
+ARVR/dev.db
+ARVR/prisma/dev.db
+.postgres-data/
+ARVR/.postgres-data/
+prisma/sqlite-data-export.json
+
+# Uploaded Files & User Media
+ARVR/public/uploads/*
+!ARVR/public/uploads/.gitkeep
+
+# Terraform & Cloud Deployments
+**/deploy/aws/.terraform/
+**/deploy/aws/*.tfstate
+**/deploy/aws/*.tfstate.*
+**/deploy/aws/crash.log
+**/deploy/aws/.terraform.tfstate.lock.info
+
+# Vercel
+.vercel/
+**/ .vercel/
