@@ -2,6 +2,21 @@
 
 An enterprise-grade, full-stack spatial computing training management platform built with **Next.js 16 (App Router & Turbopack)**, **TypeScript**, **Prisma ORM**, and **Tailwind CSS**.
 
+🌐 **Live Deployed Application**: [https://arvr-mu.vercel.app](https://arvr-mu.vercel.app)
+
+---
+
+## 📸 Screenshots & Application Preview
+
+### 1. 🎓 Student Portal Dashboard
+![Student Portal Dashboard](screenshots/student-portal-dashboard.png)
+
+### 2. 👨‍🏫 Staff & Trainer Portal
+![Staff Portal Login](screenshots/staff-portal-login.png)
+
+### 3. 🚀 Vercel Production Deployment Status
+![Vercel Deployment Status](screenshots/vercel-deployment-success.png)
+
 ---
 
 ## ✨ Overview & Key Features
@@ -30,7 +45,8 @@ An enterprise-grade, full-stack spatial computing training management platform b
 
 - **Framework**: [Next.js 16 (App Router & Turbopack)](https://nextjs.org/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with [SQLite](https://www.sqlite.org/)
+- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with [PostgreSQL](https://www.postgresql.org/) (Hosted on Render)
+- **Deployment**: [Vercel](https://vercel.com/) (Frontend/API) & [Render](https://render.com/) (PostgreSQL DB)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Authentication**: `iron-session` + `bcryptjs`
@@ -57,8 +73,9 @@ An enterprise-grade, full-stack spatial computing training management platform b
 ### 2. Installation & Running
 
 ```bash
-# Navigate to project directory
-cd ARVR
+# Clone the repository
+git clone https://github.com/Magesh-03-K/LMS-System.git
+cd LMS-System/ARVR
 
 # Install dependencies
 npm install
@@ -83,6 +100,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 ```text
 LMS_System/
 ├── README.md                 # Project Root Documentation
+├── deploy.md                 # Vercel & Render Deployment Guide
+├── screenshots/              # Application Interface Screenshots
 └── ARVR/                     # AR/VR LMS Web Application
     ├── app/
     │   ├── api/              # REST API Routes (Admin, Student, Trainer, Auth)

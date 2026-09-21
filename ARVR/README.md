@@ -2,6 +2,21 @@
 
 An enterprise-grade, full-stack spatial computing training management platform built with **Next.js 16 (Turbopack)**, **TypeScript**, **Prisma ORM**, and **Tailwind CSS**, featuring a clean **Soft Lavender Light Design System**.
 
+🌐 **Live Deployed Application**: [https://arvr-mu.vercel.app](https://arvr-mu.vercel.app)
+
+---
+
+## 📸 Screenshots & Application Preview
+
+### 🎓 Student Overview Dashboard
+![Student Portal Dashboard](screenshots/student-portal-dashboard.png)
+
+### 👨‍🏫 Staff & Trainer Portal Login
+![Staff Portal Login](screenshots/staff-portal-login.png)
+
+### 🚀 Production Deployment on Vercel
+![Vercel Deployment Status](screenshots/vercel-deployment-success.png)
+
 ---
 
 ## ✨ Key Features & Capabilities
@@ -30,7 +45,8 @@ An enterprise-grade, full-stack spatial computing training management platform b
 
 - **Framework**: [Next.js 16 (App Router & Turbopack)](https://nextjs.org/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with [SQLite](https://www.sqlite.org/)
+- **Database & ORM**: [Prisma ORM](https://www.prisma.io/) with PostgreSQL (Hosted on Render)
+- **Deployment**: [Vercel](https://vercel.com/) (Frontend/API) & [Render](https://render.com/) (PostgreSQL DB)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) (Soft Lavender Light Theme Palette)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Authentication**: `iron-session` + `bcryptjs`
@@ -58,8 +74,8 @@ An enterprise-grade, full-stack spatial computing training management platform b
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Livesh28/ARVR.git
-cd ARVR
+git clone https://github.com/Magesh-03-K/LMS-System.git
+cd LMS-System/ARVR
 
 # 2. Install dependencies
 npm install
@@ -82,13 +98,9 @@ Open `http://localhost:3000` in your browser to access the live application.
 ## 📂 Project Architecture
 
 ```text
-arvrweb/
+ARVR/
 ├── app/
-│   ├── api/
-│   │   ├── admin/            # Admin endpoints (batches, stats, student import, certificate export)
-│   │   ├── auth/             # Session verification & logout
-│   │   ├── student/          # Student endpoints (attendance, task submit, progress, curriculum)
-│   │   └── trainer/          # Staff evaluation & batch review
+│   ├── api/                  # Admin, Student, Trainer & Auth API routes
 │   ├── globals.css           # Soft Lavender theme tokens & styling utilities
 │   ├── layout.tsx            # Root application layout
 │   └── page.tsx              # Main entry point & portal tab selector
@@ -104,6 +116,7 @@ arvrweb/
 ├── prisma/
 │   ├── schema.prisma         # Database schema & relations
 │   └── seed.ts               # Demo data seeder
+├── screenshots/              # Application UI Screenshots
 └── public/
     └── uploads/              # Task submission screenshots repository
 ```
