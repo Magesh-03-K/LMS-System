@@ -49,16 +49,16 @@ git push -u origin main
 4. Click **Create Database**.
 5. Once created, copy the **External Database URL** (e.g., `postgresql://arvr_user:password@dpg-xxx.render.com/arvr_academy`).
 
-### 🗄️ Run Database Migrations & Seed Data
-From your local terminal, run Prisma migrations and seed the Render database:
+### 🗄️ Run Database Sync & Seed Data
+From your local terminal, synchronize the database schema and seed the Render database:
 
 ```bash
 cd /Users/mageshk/LMS_System/ARVR
 
-# Set DATABASE_URL and run migrations on Render PostgreSQL
-DATABASE_URL="postgresql://arvr_user:password@dpg-xxx.render.com/arvr_academy?sslmode=require" npx prisma migrate deploy
+# 1. Sync database schema with Prisma model (adds all fields like hasForenoon, etc.)
+DATABASE_URL="postgresql://arvr_user:password@dpg-xxx.render.com/arvr_academy?sslmode=require" npx prisma db push
 
-# Seed demo students, trainers, and initial batches
+# 2. Seed demo students, trainers, and initial batches
 DATABASE_URL="postgresql://arvr_user:password@dpg-xxx.render.com/arvr_academy?sslmode=require" npx prisma db seed
 ```
 
